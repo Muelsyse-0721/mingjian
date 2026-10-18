@@ -117,6 +117,7 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--blue); bord
 .btn-link:hover { text-decoration: underline; }
 
 .hint { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.err { color: #A32D2D; font-size: 12px; margin: 4px 0 0; min-height: 14px; }
 .hint code {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 4px; padding: 1px 4px; font-size: 11px;

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>明鉴 · 积分商城（商业化演示，独立页）</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/monetize.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">明鉴</span>
+    <span class="brand-sub">积分商城 · 独立演示页（与下注/辩论零耦合）</span>
+  </div>
+  <div class="topbar-right">
+    <span class="engine-badge" id="uid-badge">演示 uid：—</span>
+  </div>
+</header>
+
+<main class="monetize-wrap">
+
+  <section class="monetize-hero">
+    <h1>积分商城 · 全部以「积分」结算</h1>
+    <p>本页演示装饰性内购、VIP 权益、赞助话题位、知识墙占位与匿名聚合报告导出。所有「购买」仅花费应用内积分，绝不涉及任何真实货币。</p>
+    <div class="redline-note">
+      ★ 红线：积分不可用法币加值、不可兑回现金、不可在用户间让渡、不可与货币互转。
+      机构付费话题等真实收款能力标记为 OUT_OF_SCOPE，本页不实现任何付款流程。
+    </div>
+  </section>
+
+  <!-- ========== 装饰性内购 ========== -->
+  <h2 class="section-title">装饰性内购（花费积分）</h2>
+  <p class="section-sub">徽章 / 主页主题 / 昵称颜色，纯视觉，无数值优势。</p>
+  <div class="cosmetic-grid" id="cosmetic-grid"></div>
+
+  <!-- ========== VIP 面板 ========== -->
+  <h2 class="section-title">VIP 权益（以积分或独立虚拟权益解锁）</h2>
+  <p class="section-sub">解锁应用内功能，无任何真实货币付款。</p>
+  <div class="vip-grid" id="vip-grid"></div>
+
+  <!-- ========== 赞助话题位（展示占位） ========== -->
+  <h2 class="section-title">赞助话题位（展示占位）</h2>
+  <p class="section-sub">仅渲染横幅组件，不加载任何广告网络、不做追踪、不传递用户标识。</p>
+  <div id="sponsor-slot"></div>
+  <p class="placeholder-note">占位数据：本组件为模板示例，无真实赞助商接入。</p>
+
+  <!-- ========== 知识墙（占位展示） ========== -->
+  <h2 class="section-title">知识墙（占位展示）</h2>
+  <p class="section-sub">展示锁定预览与解锁说明，不接任何付款。</p>
+  <div id="knowledge-slot"></div>
+
+  <!-- ========== 匿名聚合报告导出 ========== -->
+  <h2 class="section-title">匿名化聚合数据报告（无 PII）</h2>
+  <p class="section-sub">读取聚合指标并导出可下载文本报告，绝不含个人可识别信息。</p>
+  <div class="report-actions">
+    <button class="btn" id="btn-report-preview" type="button">生成报告预览</button>
+    <button class="btn btn-primary" id="btn-report-download" type="button">下载报告</button>
+  </div>
+  <pre class="report-preview" id="report-preview">（点击「生成报告预览」查看；点「下载报告」保存为 .txt）</pre>
+
+  <!-- ========== OUT_OF_SCOPE 说明 ========== -->
+  <h2 class="section-title">本模块未实现（OUT_OF_SCOPE）</h2>
+  <p class="section-sub">以下能力因涉及真实货币收款，与平台红线冲突，仅作占位说明：</p>
+  <ul class="section-sub" style="list-style:disc;padding-left:20px">
+    <li>机构付费发起 / 置顶话题 —— 需真实收款通道，不在前端做任何收款流程。</li>
+    <li>任何法币加值、兑回现金、用户间让渡、与货币互换类能力 —— 一律不实现。</li>
+  </ul>
+
+</main>
+
+<!-- 仅在独立页引入商城模块；不引入 online.js / app.js 等核心文件 -->
+<script src="js/monetize.js"></script>
+<script>
+(function () {
+  'use strict';
+  // 演示用 uid（真实环境由 AuthModule.getUid() 提供，本独立页不依赖在线登录）
+  var DEMO_UID = 'demo-user-' + Math.random().toString(36).slice(2, 8);
+  var badge = document.getElementById('uid-badge');
+  if (badge) badge.textContent = '演示 uid：' + DEMO_UID;
+
+  if (typeof Monetize === 'undefined') {
+    console.error('Monetize 模块未加载');
+    return;
+  }
+
+  // ---- 渲染装饰品 ----
+  function renderCosmetics() {
+    var grid = document.getElementById('cosmetic-grid');
+    if (!grid) return;
+    Monetize.listCosmetics().forEach(function (c) {
+      var card = document.createElement('div');
+      card.className = 'cosmetic-card';
+      var prev = c.preview || {};
+      var prevStyle = '';
+      if (prev.color) prevStyle += 'background:' + prev.color + ';';
+      var prevText = prev.text || c.name;
+      card.innerHTML =
+        '<div class="preview ' + (prev.type || '') + '" style="' + prevStyle + '">' + escapeHtml(prevText) + '</div>' +
+        '<div class="c-name"></div>' +
+        '<div class="c-desc"></div>' +
+        '<div class="c-foot">' +
+          '<span class="cost-pill"></span>' +
+          '<button class="btn-buy" type="button">购买</button>' +
+        '</div>';
+      card.querySelector('.c-name').textContent = c.name;
+      card.querySelector('.c-desc').textContent = c.description;
+      card.querySelector('.cost-pill').textContent = c.cost_points + ' 积分';
+      var btn = card.querySelector('.btn-buy');
+      btn.addEventListener('click', function () {
+        // 仅组装订单行（不在此落库），演示用：打印到控制台
+        var row = Monetize.buyCosmetic(DEMO_UID, c.id);
+        console.log('[演示] 组装订单行（待宿主 insert）:', row);
+        btn.textContent = '已下单(演示)';
+        btn.disabled = true;
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  // ---- 渲染 VIP ----
+  function renderVip() {
+    var grid = document.getElementById('vip-grid');
+    if (!grid) return;
+    Monetize.listVipTiers().forEach(function (t) {
+      var card = document.createElement('div');
+      card.className = 'vip-card' + (t.duration_days >= 365 ? ' featured' : '');
+      var perks = (t.perks || []).map(function (p) { return '<li>' + escapeHtml(p) + '</li>'; }).join('');
+      card.innerHTML =
+        '<div class="v-name"></div>' +
+        '<div class="v-cost"></div>' +
+        '<div class="v-desc"></div>' +
+        '<ul>' + perks + '</ul>' +
+        '<div class="v-buy"><button class="btn-buy" type="button">解锁</button></div>';
+      card.querySelector('.v-name').textContent = t.name + '（' + t.duration_days + ' 天）';
+      card.querySelector('.v-cost').textContent = t.cost_points + ' 积分';
+      card.querySelector('.v-desc').textContent = t.description;
+      var btn = card.querySelector('.btn-buy');
+      btn.addEventListener('click', function () {
+        var row = Monetize.buyVip(DEMO_UID, t.id);
+        console.log('[演示] 组装 VIP 订单行（待宿主 insert）:', row);
+        btn.textContent = '已解锁(演示)';
+        btn.disabled = true;
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ---- 渲染赞助位 / 知识墙 ----
+  Monetize.renderSponsorBanner(document.getElementById('sponsor-slot'));
+  Monetize.renderKnowledgeGate(document.getElementById('knowledge-slot'));
+
+  // ---- 聚合报告（演示用占位聚合数据，无 PII） ----
+  var SAMPLE_STATS = {
+    totalUsers: 1284,
+    activeTopics: 37,
+    resolvedTopics: 210,
+    totalBets: 5340,
+    avgBetPoints: 142,
+    activeDebates: 12,
+    totalArbitrations: 64,
+    topicCategoryDist: { '时政': 58, '经济': 41, '科技': 33, '社会': 57, '国际': 58 }
+  };
+  var lastReport = '';
+  document.getElementById('btn-report-preview').addEventListener('click', function () {
+    lastReport = Monetize.buildAggregatedReport(SAMPLE_STATS);
+    document.getElementById('report-preview').textContent = lastReport;
+  });
+  document.getElementById('btn-report-download').addEventListener('click', function () {
+    if (!lastReport) lastReport = Monetize.buildAggregatedReport(SAMPLE_STATS);
+    Monetize.downloadReport('mingjian-aggregated-report.txt', lastReport, 'text/plain;charset=utf-8');
+  });
+
+  renderCosmetics();
+  renderVip();
+})();
+</script>
+</body>
+</html>

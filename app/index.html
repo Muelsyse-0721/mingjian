@@ -190,8 +190,8 @@
 
 </main>
 
-<!-- 昵称弹窗 -->
-<div class="modal-mask open" id="nick-mask">
+<!-- 昵称弹窗（降级 / 测试路径；线上走电话登录） -->
+<div class="modal-mask" id="nick-mask">
   <div class="modal" style="max-width:380px">
     <div class="modal-title">先起个名号</div>
     <div class="field">
@@ -205,6 +205,35 @@
   </div>
 </div>
 
+<!-- 电话登录弹窗 -->
+<div class="modal-mask" id="login-mask">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">电话登录 · 明鉴</div>
+    <p class="hint">绑定手机号登录，战绩与身份更安全。新用户将引导设置名号。</p>
+    <div class="field">
+      <label>手机号</label>
+      <input type="tel" id="login-phone" maxlength="11" placeholder="11 位手机号" inputmode="numeric">
+      <p class="err" id="login-phone-err"></p>
+    </div>
+    <div class="field">
+      <button class="btn" type="button" id="btn-send-code" style="width:auto">获取验证码</button>
+      <span id="login-countdown" class="hint"></span>
+    </div>
+    <div class="field" id="login-code-field" style="display:none">
+      <label>验证码</label>
+      <input type="text" id="login-code" maxlength="6" placeholder="短信验证码" inputmode="numeric">
+    </div>
+    <div class="field" id="login-nick-field" style="display:none">
+      <label>设置名号（2-12 字，展示在天梯榜与战绩）</label>
+      <input type="text" id="login-nick" maxlength="12" placeholder="如：观察员甲">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-login" style="width:auto">登录 / 注册</button>
+    </div>
+    <p class="err" id="login-err"></p>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
 <script src="js/sha256.js"></script>
 <script src="js/loans.js"></script>
@@ -215,6 +244,13 @@
 <script src="js/oddscurve.js"></script>
 <script src="js/betting.js"></script>
 <script src="js/question-bank.js"></script>
+<script src="js/sanitize.js"></script>
+<script src="js/ratelimit.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/audit.js"></script>
+<script src="js/antifraud.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/online.js"></script>
 </body>
 </html>

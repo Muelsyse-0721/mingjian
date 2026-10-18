@@ -294,6 +294,8 @@ var OnlineApp = (function () {
   var REFRESH_MS = 30000;
 
   var cloud = null;
+  var AuthModule = (typeof Auth !== 'undefined') ? Auth : null;
+  var countdownTimer = null;   /* 发送验证码倒计时句柄，便于复位 / 关闭时清理 */
   var state = {
     questions: [], bets: [], loans: [], payments: [],
     debates: [], debatePosts: [], debateBets: [],
@@ -306,6 +308,7 @@ var OnlineApp = (function () {
     evidenceDigest: {},
     busy: false, lastError: '',
     adminUnlocked: false,
+    isAdmin: false,
     llmBusy: '', llmSuggestion: null
   };
 
@@ -395,6 +398,8 @@ var OnlineApp = (function () {
       state.questions = rs[0].data || [];
       state.bets = rs[1].data || [];
       state.settings = OnlineCore.settingsFromRows(rs[2].data || []);
+      /* 把站长口令哈希注入 Admin 闭包（取代 global state 广播；Admin 未定义则跳过） */
+      if (typeof Admin !== 'undefined') Admin.setTokenHash(state.settings.tokenHash || '');
       state.loans = rs[3].data || [];
       state.payments = rs[4].data || [];
       state.debates = rs[5].data || [];
@@ -447,6 +452,7 @@ var OnlineApp = (function () {
 
   /* 统一写操作：busy → 执行 → 重载 → 破产检查 → 仲裁质押兜底结算 → 公投到期兜底结算 → 渲染；失败弹窗且恢复 */
   function withCloud(work) {
+    if (AuthModule && !AuthModule.isAuthed()) { openLoginModal(); return; }
     if (state.busy) return;
     setBusy(true);
     return work().then(function () {
@@ -507,9 +513,13 @@ var OnlineApp = (function () {
     if (OnlineCore.isExpired(q)) { alert('已过截止日期，等待揭晓'); return; }
     if (!state.settings.site.accept_new_bets) { alert('站长已暂停接受新投注'); return; }
     if (state.settings.site.maintenance) { alert('站务维护中，暂停投注'); return; }
+    /* 客户端节流（无后端，纯防御性；测试环境 RateLimit 未定义则跳过） */
+    if (typeof RateLimit !== 'undefined' && !RateLimit.preset('bet').allow().ok) { alert('操作过于频繁，请稍后再试'); return; }
     stake = Math.floor(Number(stake));
     var minBet = state.settings.site.min_bet;
     if (!(stake >= minBet)) { alert('投注额最少 ' + minBet + ' 分'); return; }
+    /* 配额下限校验（与既有逻辑一致；Validate 未定义则跳过） */
+    if (typeof Validate !== 'undefined' && !Validate.checkMinBet(stake, minBet).ok) { alert('投注额需不小于最小限额'); return; }
     var avail = totalPoints();
     if (stake > Math.floor(avail)) { alert('积分不足：当前可用 ' + Math.floor(avail) + ' 分'); return; }
 
@@ -556,6 +566,10 @@ var OnlineApp = (function () {
         '\n\n揭晓后所有人的相关投注将立即结算，不可撤销。')) return;
     }
     doSettle(q, resultOid);
+    /* 审计：记录揭晓动作（Audit 未定义则跳过，绝不阻断主流程） */
+    if (typeof Audit !== 'undefined') {
+      Audit.log(cloud, { action: 'settle', tbl: 'jp_questions', rowId: qid, meta: { resultOid: resultOid, byAdmin: !!opts.byAdmin } });
+    }
   }
 
   /* 结算核心：支持 resultOid='draw'（公投平局 → 投注全额退还） */
@@ -610,6 +624,12 @@ var OnlineApp = (function () {
 
   /* 一人一票：本机 uid 唯一；截止前可改票 */
   function castVote(qid, choice) {
+    /* 防刷：一人一票前置（电话身份锚点）；未加载 AntiFraud 则跳过 */
+    if (typeof AntiFraud !== 'undefined') {
+      var ae = AntiFraud.enforceVoteEligibility(state.uid, { surface: 'publicVote' });
+      if (!ae.ok) { alert(ae.error); return; }
+    }
+    if (typeof RateLimit !== 'undefined' && !RateLimit.preset('vote').allow().ok) { alert('投票过于频繁，请稍后再试'); return; }
     var q = findQuestion(qid);
     if (!q || OnlineCore.zoneOf(q) !== 'voting') { alert('当前不在公投期'); return; }
     if (OnlineCore.voteClosed(q)) { alert('公投已结束，等待结算'); return; }
@@ -703,6 +723,12 @@ var OnlineApp = (function () {
 
   /* ---------- 动作：建题 ---------- */
   function createQuestion() {
+    /* 防刷：出题同样要求登录身份；未加载 AntiFraud 则跳过 */
+    if (typeof AntiFraud !== 'undefined') {
+      var aeq = AntiFraud.enforceVoteEligibility(state.uid, { surface: 'createQuestion' });
+      if (!aeq.ok) { alert(aeq.error); return; }
+    }
+    if (typeof RateLimit !== 'undefined' && !RateLimit.preset('createQuestion').allow().ok) { alert('出题过于频繁，请稍后再试'); return; }
     var title = $('q-title').value.trim();
     var descr = $('q-desc').value.trim();
     var mode = $('q-mode').value;
@@ -2210,7 +2236,7 @@ var OnlineApp = (function () {
         if (e.validated) badges += '<span class="q-status open">揭晓命中 +' + EvidenceCore.EVIDENCE_REWARD + '</span>';
         return '<div class="evidence-item' + (e.status === 'rejected' ? ' rejected' : '') + '">' +
           '<div class="evidence-head"><span class="evidence-side ' + sideCls + '">' + sideTxt + '</span>' +
-          (e.url ? '<a class="evidence-link" href="' + esc(e.url) + '" target="_blank" rel="noopener">' + esc(e.title) + ' ↗</a>'
+          (e.url ? '<a class="evidence-link" href="' + (typeof Sanitize !== 'undefined' ? Sanitize.sanitizeUrl(e.url) : esc(e.url)) + '" target="_blank" rel="noopener">' + esc(e.title) + ' ↗</a>'
             : '<span class="evidence-link">' + esc(e.title) + '</span>') +
           badges + '</div>' +
           (e.summary ? '<div class="evidence-sum">' + esc(e.summary) + '</div>' : '') +
@@ -2425,6 +2451,7 @@ var OnlineApp = (function () {
   }
 
   function createDispute(qid) {
+    if (typeof RateLimit !== 'undefined' && !RateLimit.preset('disputeFile').allow().ok) { alert('发起仲裁过于频繁，请稍后再试'); return; }
     var q = findQuestion(qid);
     if (!q) return;
     var sel = document.querySelector('input[name="dp-new-' + qid + '"]:checked');
@@ -2542,6 +2569,10 @@ var OnlineApp = (function () {
       }
       return chain;
     });
+    /* 审计：记录改判动作（Audit 未定义则跳过） */
+    if (typeof Audit !== 'undefined') {
+      Audit.log(cloud, { action: 'dispute_resolve', tbl: 'jp_disputes', rowId: dispute ? dispute.id : q.qid, meta: { qid: q.qid, newResult: newResult } });
+    }
   }
 
   /* 站长从仲裁队列执行改判（要求社区裁决已支持） */
@@ -2590,10 +2621,38 @@ var OnlineApp = (function () {
     try { return JSON.parse(localStorage.getItem(LLM_KEY) || '{}'); } catch (e) { return {}; }
   }
 
+  /* 站长解锁状态按「当前账号 uid」绑定，避免同浏览器换号后继承解锁 */
+  function adminUnlockedFor(u) {
+    if (!u) return false;
+    try { return localStorage.getItem(ADMIN_KEY) === u; } catch (e) { return false; }
+  }
+
+  /* 服务器端判定是否管理员（uid 在 jp_admin_whitelist 内），非管理员隐藏站长台入口 */
+  function applyAdminNav() {
+    var btn = document.querySelector('.nav-btn[data-view="admin"]');
+    if (!btn) return;
+    if (AuthModule) btn.style.display = state.isAdmin ? '' : 'none';
+  }
+  function syncAdminRole() {
+    if (!AuthModule || !cloud || !cloud.database || !cloud.database.rpc) {
+      state.isAdmin = false; applyAdminNav(); return;
+    }
+    Promise.resolve(cloud.database.rpc('is_admin')).then(function (r) {
+      state.isAdmin = !!(r && (r.data === true || r.data === 'true'));
+      if (state.isAdmin) {
+        state.adminUnlocked = true; /* 管理员凭绑定手机号直接可用控制台 */
+        if ($('q-settle-manual')) $('q-settle-manual').style.display = '';
+      }
+      applyAdminNav();
+      if (typeof renderAdmin === 'function') renderAdmin();
+    }).catch(function () { state.isAdmin = false; applyAdminNav(); });
+  }
+
   function renderAdmin() {
     var gate = $('admin-gate');
     var body = $('admin-body');
     if (!gate || !body) return;
+    if (AuthModule && !state.isAdmin) { gate.style.display = 'none'; body.style.display = 'none'; return; }
     if (!state.adminUnlocked) {
       gate.style.display = '';
       body.style.display = 'none';
@@ -2627,11 +2686,25 @@ var OnlineApp = (function () {
     var v = ($('admin-token') || {}).value || '';
     v = v.trim();
     if (!v) { alert('请输入站长口令'); return; }
+    /* 站长台必须绑定已登录账号（否则任何未登录者都能解锁） */
+    if (AuthModule && !AuthModule.isAuthed()) { alert('请先登录站长账号，再解锁站长台'); return; }
+    /* 优先走 Admin 模块（哈希锁进闭包，取代前端广播 tokenHash）；
+       Admin 未定义（测试/降级）时回退到既有 SHA256 比对。 */
+    if (typeof Admin !== 'undefined') {
+      Admin.unlock(v).then(function (r) {
+        if (!r.ok) { alert(r.error || '口令不正确'); return; }
+        state.adminUnlocked = true;
+        localStorage.setItem(ADMIN_KEY, state.uid || '');
+        if ($('q-settle-manual')) $('q-settle-manual').style.display = '';
+        renderAll();
+      });
+      return;
+    }
     var hash = SHA256.sha256(v);
     if (!state.settings.tokenHash) { alert('云端尚未设置站长口令哈希，请先在数据管理中初始化'); return; }
     if (hash !== state.settings.tokenHash) { alert('口令不正确'); return; }
     state.adminUnlocked = true;
-    localStorage.setItem(ADMIN_KEY, '1');
+    localStorage.setItem(ADMIN_KEY, state.uid || '');
     /* 站长解锁后开放「人工揭晓」建题选项 */
     if ($('q-settle-manual')) $('q-settle-manual').style.display = '';
     renderAll();
@@ -2921,7 +2994,7 @@ var OnlineApp = (function () {
         html += '<tr>' +
           '<td class="ledger-note">' + esc(q ? q.title : e.qid) + '</td>' +
           '<td>' + ({ yes: '支持', no: '反对', neutral: '中立' }[e.side] || e.side) + '</td>' +
-          '<td class="ledger-note">' + esc(e.title) + (e.url ? ' <a href="' + esc(e.url) + '" target="_blank" rel="noopener">↗</a>' : '') + '</td>' +
+          '<td class="ledger-note">' + esc(e.title) + (e.url ? ' <a href="' + (typeof Sanitize !== 'undefined' ? Sanitize.sanitizeUrl(e.url) : esc(e.url)) + '" target="_blank" rel="noopener">↗</a>' : '') + '</td>' +
           '<td>' + esc(e.nickname || '匿名') + '</td>' +
           '<td>👍 ' + (Number(e.votes_up) || 0) + ' / 👎 ' + (Number(e.votes_down) || 0) + '</td>' +
           '<td class="admin-ops">' +
@@ -3233,6 +3306,7 @@ var OnlineApp = (function () {
     on('btn-export-evidence', 'click', exportEvidenceCSV);
     on('btn-token', 'click', changeAdminToken);
     on('btn-lock', 'click', function () {
+      if (typeof Admin !== 'undefined') Admin.lock();
       state.adminUnlocked = false;
       localStorage.removeItem(ADMIN_KEY);
       renderAll();
@@ -3318,6 +3392,7 @@ var OnlineApp = (function () {
 
   /* ---------- 视图切换 ---------- */
   function switchView(name) {
+    if (name === 'admin' && AuthModule && !state.isAdmin) name = 'hall';
     state.view = name;
     Array.prototype.forEach.call(document.querySelectorAll('.nav-btn'), function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === name);
@@ -3340,23 +3415,98 @@ var OnlineApp = (function () {
     renderAll();
   }
 
-  /* ---------- 初始化 ---------- */
-  function init() {
-    initCloud();
-    state.uid = uid();
-    state.nickname = localStorage.getItem(NICK_KEY) || '';
-    state.adminUnlocked = localStorage.getItem(ADMIN_KEY) === '1';
+  /* ---------- 登录模态 ---------- */
+  function openLoginModal() { var m = $('login-mask'); if (m) m.classList.add('open'); }
+  function closeLoginModal() {
+    var m = $('login-mask'); if (m) m.classList.remove('open');
+    resetCountdown();
+  }
+  function resetCountdown() {
+    if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
+    var btn = $('btn-send-code'), cd = $('login-countdown');
+    if (btn) btn.disabled = false;
+    if (cd) cd.textContent = '';
+  }
+  function startCountdown() {
+    var btn = $('btn-send-code'), cd = $('login-countdown');
+    if (!btn) return;
+    if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
+    var n = 60; btn.disabled = true;
+    (function tick() {
+      if (cd) cd.textContent = n + ' 秒后可重发';
+      if (n <= 0) { btn.disabled = false; if (cd) cd.textContent = ''; countdownTimer = null; return; }
+      n--; countdownTimer = setTimeout(tick, 1000);
+    })();
+  }
 
-    on('btn-nick', 'click', function () {
-      $('nick-input').value = state.nickname;
-      openNickModal();
+  function onSendCode() {
+    if (!AuthModule) return;
+    var phone = $('login-phone').value.trim();
+    var err = $('login-phone-err');
+    if (err) err.textContent = '';
+    if (!/^1\d{10}$/.test(phone)) { if (err) err.textContent = '请输入正确的 11 位手机号'; return; }
+    AuthModule.sendCode(phone).then(function (res) {
+      if (res && res.error) { if (err) err.textContent = res.error.message; return; }
+      var cf = $('login-code-field'); if (cf) cf.style.display = '';
+      startCountdown();
     });
-    on('btn-nick-save', 'click', saveNick);
+  }
+
+  function onLoginSubmit() {
+    if (!AuthModule) return;
+    var le = $('login-err');
+    if (le) le.textContent = '';
+    var phone = $('login-phone').value.trim();
+    var code = $('login-code').value.trim();
+
+    /* 已建立会话（新用户校验成功、正在补全昵称）：直接走昵称分支，
+       避免重复校验与因 pending 已清空导致的死锁（新用户无法完成登录） */
+    if (AuthModule.isAuthed()) {
+      var nk = $('login-nick').value.trim();
+      if (!nk) { if (le) le.textContent = '请设置名号（2-12 字）'; return; }
+      AuthModule.ensureNickname(nk).then(finishLogin);
+      return;
+    }
+
+    var pend = AuthModule.getPending();
+    if (!pend) { if (le) le.textContent = '请先获取验证码'; return; }
+    if (!code) { if (le) le.textContent = '请输入验证码'; return; }
+    AuthModule.verify(phone, code).then(function (res) {
+      if (le) le.textContent = '';
+      if (res && res.error) { if (le) le.textContent = res.error.message; return; }
+      if (!pend.isExistingUser) {
+        var nf = $('login-nick-field'); if (nf) nf.style.display = '';
+        var nick = $('login-nick').value.trim();
+        if (!nick) { if (le) le.textContent = '请设置名号（2-12 字）'; return; }
+        AuthModule.ensureNickname(nick).then(finishLogin);
+      } else {
+        AuthModule.loadServerNickname().then(finishLogin);
+      }
+    });
+  }
+
+  function finishLogin() {
+    state.uid = AuthModule.getUid();
+    state.nickname = AuthModule.getNickname();
+    state.adminUnlocked = adminUnlockedFor(state.uid);
+    syncAdminRole();
+    closeLoginModal();
+    AuthModule.migrateOldUid().then(function () { refresh(); });
+  }
+
+  function setupLoginUI() {
+    if (!AuthModule) return;
+    var sendBtn = $('btn-send-code'), loginBtn = $('btn-login');
+    if (sendBtn) sendBtn.addEventListener('click', onSendCode);
+    if (loginBtn) loginBtn.addEventListener('click', onLoginSubmit);
+  }
+
+  /* ---------- 初始化 ---------- */
+  function wireCommonUI() {
     on('btn-create-q', 'click', createQuestion);
     on('q-mode', 'change', function () {
       $('q-odds-field').style.display = $('q-mode').value === 'fixed' ? '' : 'none';
     });
-    /* 揭晓方式联动：公投才需要公投截止日；人工揭晓仅站长可选 */
     var manualOpt = $('q-settle-manual');
     if (manualOpt && !state.adminUnlocked) manualOpt.style.display = 'none';
     on('q-settle', 'change', function () {
@@ -3369,18 +3519,59 @@ var OnlineApp = (function () {
     Array.prototype.forEach.call(document.querySelectorAll('.nav-btn'), function (b) {
       b.addEventListener('click', function () { switchView(b.getAttribute('data-view')); });
     });
+    on('btn-nick-save', 'click', saveNick);
+    /* 顶栏：已登录→退出；有 Auth 未登录→弹登录框；无 Auth（降级）→昵称弹窗 */
+    on('btn-nick', 'click', function () {
+      if (AuthModule && AuthModule.isAuthed()) {
+        if (confirm('退出当前账号？战绩仍保留在云端。')) {
+          AuthModule.signOut().then(function () { if (location && location.reload) location.reload(); });
+        }
+      } else if (AuthModule) {
+        openLoginModal();
+      } else {
+        $('nick-input').value = state.nickname;
+        openNickModal();
+      }
+    });
+  }
 
-    if (!state.nickname) {
-      openNickModal();
-    } else {
-      closeNickModal();
-    }
+  function enterAsAuthed() {
+    state.uid = AuthModule.getUid();
+    state.nickname = AuthModule.getNickname();
+    state.adminUnlocked = adminUnlockedFor(state.uid);
+    wireCommonUI();
+    syncAdminRole();
+    refresh();
+    setInterval(function () { if (AuthModule.isAuthed() && !state.busy) refresh(); }, REFRESH_MS);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && AuthModule.isAuthed() && !state.busy) refresh();
+    });
+  }
+
+  function legacyInit() {
+    state.uid = uid();
+    state.nickname = localStorage.getItem(NICK_KEY) || '';
+    state.adminUnlocked = adminUnlockedFor(state.uid);
+    wireCommonUI();
+    if (!state.nickname) openNickModal(); else closeNickModal();
     refresh();
     setInterval(function () { if (!state.busy) refresh(); }, REFRESH_MS);
-    /* 页面从后台切回时立即刷新（手机上切应用回来） */
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden && !state.busy) refresh();
     });
+  }
+
+  function init() {
+    initCloud();
+    state.adminUnlocked = false; /* 由各登录分支按当前账号 uid 计算（adminUnlockedFor） */
+    if (AuthModule) {
+      AuthModule.init(cloud).then(function () {
+        if (AuthModule.isAuthed()) enterAsAuthed();
+        else { setupLoginUI(); openLoginModal(); }
+      }).catch(function () { setupLoginUI(); openLoginModal(); });
+    } else {
+      legacyInit();
+    }
   }
 
   return { init: init };
