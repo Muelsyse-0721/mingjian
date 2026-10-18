@@ -19,12 +19,13 @@
 | docs/05-预测下注模块.md | 预测市场玩法：赔率规则、结算、积分流水、热点题库、合规红线 |
 | docs/06-联机版设计.md | 联机版架构、身份模型与信任边界、数据模型、测试体系 |
 | docs/07-联机玩法扩展.md | 赛季徽章、对线房、证据情报站、社区仲裁、赔率曲线与预期指数（v1.1） |
+| docs/08-揭晓治理与浏览.md | 三种揭晓方式与防滥用、公投规则、大厅分区与筛选排序（v1.2） |
 
 ## 当前阶段
 
-**v1.1 已上线**（2026-10-18）：🌐 **https://jp-ladder.app.workbuddy.host/**
+**v1.2 已上线**（2026-10-18）：🌐 **https://jp-ladder.app.workbuddy.host/**
 
-- 联机版（线上入口 `index.html`）：免登录昵称制，预测下注 + 信用借贷 + 赛季徽章 + 对线房 + 证据情报站 + 社区仲裁 + 预期指数，天梯榜按净资产实时排名
+- 联机版（线上入口 `index.html`）：免登录昵称制，预测下注 + 信用借贷 + 赛季徽章 + 对线房 + 证据情报站 + 社区仲裁 + 预期指数 + 公投揭晓，天梯榜按净资产实时排名
 - 单机版（线上 `/solo.html`，本地双击 `app/solo.html`）：辩论评分 + 预测下注 + 信用借贷 + 赛季徽章 + 个人中心，数据存本机
 
 联机版范围（用户确认的第一期边界）：**只押注、不评分**——评分模块保持单机；
@@ -57,7 +58,20 @@
 - **数据表扩到 12 张**：新增 `jp_debates / jp_debate_posts / jp_debate_bets / jp_evidence / jp_disputes / jp_dispute_votes / jp_odds_snaps`（均公开读写策略，round-trip 全过）
 - **口径统一**：非投注行（奖励 bonus / 质押 stake / 差额 adjust）计入现金与流水，不计胜场、不入投注 CSV；仲裁质押在结算前计入「在押」，榜单净资产与玩家视角一致
 
+### v1.2 新增：防滥用揭晓 + 公投结算 + 分类浏览（2026-10-18）
+
+- **揭晓方式三分**（建题时选定，防滥用核心）：到期后**一般不允许人发起揭晓**
+  - **平台检索**（默认）：能通过网络搜索核实的问题，到期后进「待平台检索」区，由平台联网查证公开事实后揭晓（每日自动检索 + 站长兜底）；任何人无手动揭晓入口
+  - **公投揭晓**：主观议题（如「美国 2027 是否会衰落」），到期后进「公投中」区，一人一票、截止前可改票；投票截止后按多数决自动结算，**平局则投注全额退还**；无人投票则转人工
+  - **人工揭晓**：legacy 模式，仅站长可建，任何人可按公开事实发起
+- **大厅五分区**：进行中 / 待平台检索 / 公投中 / 待人工揭晓 / 已揭晓档案（结束问题永久留存）
+- **浏览优化**：题卡带分类标签；工具条支持按分类、截止时间（7/30/90 天内、今年、明年起、无截止）筛选，按热度（投注+奖池）、发布时间、奖池、截止时间排序
+- **数据**：新增 `jp_public_votes` 表（公投，qid+uid 唯一，可改票）；`jp_questions` 增加 `settle_mode / category / vote_end` 列；100 道题库题回填分类与 `settle_mode=search`
+- **平台检索工具**：`app/tools/platform-search.js`（`list` 查到期题 / `settle` 按事实揭晓，幂等、含证据奖励）；已配每日 09:00 自动检索（设置里可查看暂停）
+- 归档展示揭晓方式与分类；平局题显示「公投平局 · 投注全额退还」
+
 ### 本地运行
+
 
 
 联机版：`cd app && python3 -m http.server 8000` → http://localhost:8000/ （需联网加载云 SDK）
@@ -68,12 +82,17 @@
 ```bash
 export NODE_PATH=/Users/wangxiaoli/.workbuddy/binaries/node/workspace/node_modules
 node app/test/smoke-test.js       # 单机版 63 项（含徽章/借贷/破产保护）
-node app/test/online-test.js      # 联机版 230 项（含对线房/证据/仲裁/赔率曲线全流程）
-node app/test/cloud-roundtrip.js  # 真实云端读写 round-trip（十二表）
+node app/test/online-test.js      # 联机版 265 项（含公投/分区/筛选/对线房/证据/仲裁全流程）
+node app/test/cloud-roundtrip.js  # 真实云端读写 round-trip（十三表）
+
+# 平台检索（到期未揭晓的 search 模式题）
+NODE_PATH=<managed workspace>/node_modules node app/tools/platform-search.js list
+node app/tools/platform-search.js settle <qid> <resultOid> --note "公开事实依据" 
 ```
 
 ### 下一步（M2 方向）
 
 - 接入 cloud.auth 登录（站长优先），RLS 按身份收紧——关掉「公开写表」的伪造敞口
 - 接入真实 LLM 评分并校准（金标准集 + 立场中立测试）
-- 到期自动揭晓、多人复核、赔率曲线长周期数据运营
+- 公投防刷：公投引入设备/身份维度约束（当前为免登录一机一票）
+- 赔率曲线长周期数据运营、赛季徽章实体化
