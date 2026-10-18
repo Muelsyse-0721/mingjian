@@ -20,12 +20,16 @@
 | docs/06-联机版设计.md | 联机版架构、身份模型与信任边界、数据模型、测试体系 |
 | docs/07-联机玩法扩展.md | 赛季徽章、对线房、证据情报站、社区仲裁、赔率曲线与预期指数（v1.1） |
 | docs/08-揭晓治理与浏览.md | 三种揭晓方式与防滥用、公投规则、大厅分区与筛选排序（v1.2） |
+| docs/09-安全与商业化路线图.md | 电话登录、防黑客、CAPTCHA、盈利红线的完整答复 |
+| docs/10-GitHub-Desktop-公开发布指南.md | 用 GitHub Desktop 公开发布仓库 |
+| docs/11-积分经济体与奖池规则草案.md | 抽水/奖池/商城/VIP/赛季的规则草案（无赛季方向） |
+| docs/12-积分经济体与安全落地说明.md | v1.3 已落地的安全模型与积分经济体现状 |
 
 ## 当前阶段
 
-**v1.2 已上线**（2026-10-18）：🌐 **https://jp-ladder.app.workbuddy.host/**
+**v1.3 已上线**（2026-10-18）：🌐 **https://jp-ladder.app.workbuddy.host/**
 
-- 联机版（线上入口 `index.html`）：免登录昵称制，预测下注 + 信用借贷 + 赛季徽章 + 对线房 + 证据情报站 + 社区仲裁 + 预期指数 + 公投揭晓，天梯榜按净资产实时排名
+- 联机版（线上入口 `index.html`）：**手机验证码登录**（cloud.auth，未登录只读），预测下注 + 信用借贷 + 赛季徽章 + 对线房 + 证据情报站 + 社区仲裁 + 预期指数 + 公投揭晓 + **公共奖池 / 商城 / VIP**，天梯榜按净资产实时排名
 - 单机版（线上 `/solo.html`，本地双击 `app/solo.html`）：辩论评分 + 预测下注 + 信用借贷 + 赛季徽章 + 个人中心，数据存本机
 
 联机版范围（用户确认的第一期边界）：**只押注、不评分**——评分模块保持单机；
@@ -70,6 +74,19 @@
 - **平台检索工具**：`app/tools/platform-search.js`（`list` 查到期题 / `settle` 按事实揭晓，幂等、含证据奖励）；已配每日 09:00 自动检索（设置里可查看暂停）
 - 归档展示揭晓方式与分类；平局题显示「公投平局 · 投注全额退还」
 
+### v1.3 新增：电话登录 + RLS 收紧 + 公共奖池 + 商城/VIP + 月榜（2026-10-18）
+
+- **电话登录**（`js/auth.js`，cloud.auth 短信验证码）：未登录只读、不能写；首登自动把本机旧战绩过户到新账号（`migrate_legacy_uid` RPC）
+- **RLS 收紧**：13 表 + `jp_profiles` 全开；匿名只读；登录用户读全站、只写自己；站长表写仅 `is_admin()`；`jp_settings` 匿名读排除 `admin_token_hash`
+- **管理员唯一化**：只认站长本人手机号（`jp_admin_whitelist` + `is_admin()`，白名单在云端维护），其他账号前端不显示站长台
+- **公共奖池**：卡池抽水的 60% 记账进 `jp_prize_pool_log`（40% 销毁），大厅公示；站长台可手动发放 / 按本月收益榜发放；含幂等拦截与「上月榜待发放」提示
+- **积分商城**（新导航「商城」）：装饰 10 件 + VIP 两档，积分购买、买后消耗；可换装（仅本人 `equipped` 列）
+- **VIP 特权**：下注返利（抽水折扣惠及本人，不改全池赔率）、借款额度提升、建题上限提升
+- **建题归属**：`jp_questions.creator_uid`，建题上限按 uid 计数（防改昵称绕过）
+- **老数据清理**：未电话绑定的本地旧号（`u-` 前缀）及其下注已删除，只保留电话绑定账号
+- **新增表**：`jp_profiles / jp_prize_pool_log / jp_store_orders / jp_user_items / jp_vip / jp_admin_whitelist / jp_audit_log`
+- 详见 `docs/12-积分经济体与安全落地说明.md`
+
 ### 本地运行
 
 
@@ -83,6 +100,7 @@
 export NODE_PATH=/Users/wangxiaoli/.workbuddy/binaries/node/workspace/node_modules
 node app/test/smoke-test.js       # 单机版 63 项（含徽章/借贷/破产保护）
 node app/test/online-test.js      # 联机版 265 项（含公投/分区/筛选/对线房/证据/仲裁全流程）
+node app/test/auth-test.js        # 电话登录模块 26 项
 node app/test/cloud-roundtrip.js  # 真实云端读写 round-trip（十三表）
 
 # 平台检索（到期未揭晓的 search 模式题）
@@ -90,9 +108,9 @@ NODE_PATH=<managed workspace>/node_modules node app/tools/platform-search.js lis
 node app/tools/platform-search.js settle <qid> <resultOid> --note "公开事实依据" 
 ```
 
-### 下一步（M2 方向）
+### 下一步
 
-- 接入 cloud.auth 登录（站长优先），RLS 按身份收紧——关掉「公开写表」的伪造敞口
-- 接入真实 LLM 评分并校准（金标准集 + 立场中立测试）
-- 公投防刷：公投引入设备/身份维度约束（当前为免登录一机一票）
-- 赔率曲线长周期数据运营、赛季徽章实体化
+- 真实 LLM 评分校准（金标准集 + 立场中立测试）——单机版地基
+- 平台检索自动化以站长/服务端身份执行（当前 RLS 下 anon 结算会被拒）
+- 管理员白名单可视化运维 + 审计日志面板
+- 商城 / VIP 运营位与月度赛事活动（无赛季重置，用月榜/赛事）

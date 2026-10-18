@@ -24,7 +24,8 @@ function createFakeDB(seed) {
   const tables = {
     jp_questions: [], jp_bets: [], jp_settings: [], jp_loans: [], jp_loan_payments: [],
     jp_debates: [], jp_debate_posts: [], jp_debate_bets: [],
-    jp_evidence: [], jp_disputes: [], jp_dispute_votes: [], jp_odds_snaps: [], jp_public_votes: []
+    jp_evidence: [], jp_disputes: [], jp_dispute_votes: [], jp_odds_snaps: [], jp_public_votes: [],
+    jp_prize_pool_log: [], jp_user_items: [], jp_vip: []
   };
   /* 与真实库一致的自增主键列 */
   const PK = { jp_evidence: 'eid', jp_debate_posts: 'pid', jp_debate_bets: 'dbid', jp_odds_snaps: 'id' };

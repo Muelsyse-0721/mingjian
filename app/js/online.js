@@ -33,7 +33,8 @@ var OnlineCore = (function () {
     force_mult: 1.5,
     force_min_net: -300,
     min_bet: 10,
-    min_loan: 10
+    min_loan: 10,
+    rake_to_pool_pct: 60   /* 抽水中进公共奖池的百分比（其余销毁/通缩） */
   };
 
   /* 从 jp_settings 行数组提取 { tokenHash, site, allocLog, season } */
@@ -301,6 +302,9 @@ var OnlineApp = (function () {
     debates: [], debatePosts: [], debateBets: [],
     evidence: [], disputes: [], disputeVotes: [], oddsSnaps: [],
     publicVotes: [],
+    prizePoolLog: [],
+    userItems: [],
+    vip: null,
     settings: { tokenHash: '', site: OnlineCore.DEFAULT_SETTINGS, allocLog: [], season: null },
     uid: '', nickname: '',
     view: 'hall', hallTab: 'open', debateRoom: '',
@@ -365,6 +369,34 @@ var OnlineApp = (function () {
   function setBusy(v) { state.busy = v; renderAll(); }
   function showError(msg) { state.lastError = msg; renderAll(); }
 
+  /* ---------- 公共奖池 ---------- */
+  function poolBalance() {
+    var sum = 0;
+    (state.prizePoolLog || []).forEach(function (r) { sum += Number(r.amount) || 0; });
+    return Math.floor(sum);
+  }
+  function loadPrizePool() {
+    if (!cloud || !cloud.database) return Promise.resolve();
+    return Promise.resolve(
+      cloud.database.from('jp_prize_pool_log').select('*').order('ts', { ascending: false }).limit(500)
+    ).then(function (r) {
+      state.prizePoolLog = (r && r.data) || [];
+    }).catch(function () { state.prizePoolLog = []; });
+  }
+
+  function loadUserItems() {
+    if (!cloud || !cloud.database) return Promise.resolve();
+    return Promise.resolve(cloud.database.from('jp_user_items').select('*'))
+      .then(function (r) { state.userItems = (r && r.data) || []; })
+      .catch(function () { state.userItems = []; });
+  }
+  function loadVip() {
+    if (!cloud || !cloud.database || !state.uid) { state.vip = null; return Promise.resolve(); }
+    return Promise.resolve(cloud.database.from('jp_vip').select('*').eq('uid', state.uid).limit(1))
+      .then(function (r) { state.vip = (r && r.data && r.data[0]) || null; })
+      .catch(function () { state.vip = null; });
+  }
+
   /* ---------- 云端 ---------- */
   function initCloud() {
     cloud = window.WorkBuddyCloud.createWorkBuddyCloud({
@@ -417,6 +449,7 @@ var OnlineApp = (function () {
   function refresh() {
     setBusy(true);
     return loadData()
+      .then(function () { return Promise.all([loadPrizePool(), loadUserItems(), loadVip()]); })
       .then(function () { return checkBankruptcy(); })
       .then(function () { return checkDisputeStakes(); })
       .then(function () { return checkVoteSettles(); })
@@ -532,6 +565,18 @@ var OnlineApp = (function () {
       }).then(function (r) {
         if (r.error) throw new Error(r.error.message || '下注失败');
       });
+      /* VIP 抽水返利：给 VIP 本人补一笔 bonus（不改全池赔率，只惠及本人） */
+      chain = chain.then(function () {
+        if (typeof VipCore === 'undefined' || !state.vip || !q.fee) return null;
+        if (!VipCore.isActive(state.vip, Date.now())) return null;
+        var rebate = VipCore.feeRebateOf(stake, q.fee, state.vip, Date.now());
+        if (!(rebate > 0)) return null;
+        return cloud.database.from('jp_bets').insert({
+          qid: qid, uid: state.uid, nickname: state.nickname, outcome_id: oid,
+          stake: 0, odds_at_bet: 0, status: 'won', kind: 'bonus', payout: rebate,
+          placed_at: new Date().toISOString(), settled_at: new Date().toISOString()
+        }).then(function () {});
+      });
       /* 赔率曲线快照：节流写入（含本笔投注后的最新池） */
       chain = chain.then(function () {
         if (q.mode !== 'pool') return null;
@@ -613,6 +658,19 @@ var OnlineApp = (function () {
           return cloud.database.from('jp_evidence').update({ validated: true }).eq('eid', e.eid).then(check);
         });
       });
+      /* 公共奖池：把本题抽水的一部分记账进奖池（不改赔率，仅记录去向） */
+      var totalPool = state.bets.filter(function (b) { return b.qid === q.qid && (!b.kind || b.kind === 'bet'); })
+        .reduce(function (s, b) { return s + (Number(b.stake) || 0); }, 0);
+      var rakeAmt = Math.round(totalPool * (Number(q.fee) || 0));
+      var toPool = Math.round(rakeAmt * (Number(state.settings.site.rake_to_pool_pct) || 0) / 100);
+      if (toPool > 0) {
+        chain = chain.then(function () {
+          return cloud.database.from('jp_prize_pool_log').insert({
+            amount: toPool, reason: 'rake', ref_qid: q.qid,
+            meta: { fee: q.fee, total_pool: totalPool, rake: rakeAmt }
+          }).then(function () {}).catch(function () {});
+        });
+      }
       return chain;
     });
   }
@@ -729,6 +787,14 @@ var OnlineApp = (function () {
       if (!aeq.ok) { alert(aeq.error); return; }
     }
     if (typeof RateLimit !== 'undefined' && !RateLimit.preset('createQuestion').allow().ok) { alert('出题过于频繁，请稍后再试'); return; }
+    /* VIP：同时进行建题数上限（VIP 可提高；未加载 VipCore 则跳过） */
+    if (typeof VipCore !== 'undefined') {
+      var capQ = VipCore.maxQuestions(3, state.vip, Date.now());
+      var mineOpen = state.questions.filter(function (qq) {
+        return qq.status === 'open' && (qq.creator_uid ? qq.creator_uid === state.uid : qq.creator_name === state.nickname);
+      }).length;
+      if (mineOpen >= capQ) { alert('同时进行的建题数已达上限 ' + capQ + '（VIP 可提高）'); return; }
+    }
     var title = $('q-title').value.trim();
     var descr = $('q-desc').value.trim();
     var mode = $('q-mode').value;
@@ -775,7 +841,7 @@ var OnlineApp = (function () {
         deadline: deadline, outcomes: outcomes, pool: pool,
         settle_mode: settleMode, vote_end: settleMode === 'vote' ? voteEnd : null,
         category: ($('q-cat') ? $('q-cat').value : '') || '未分类',
-        creator_name: state.nickname
+        creator_uid: state.uid, creator_name: state.nickname
       }).then(function (r) {
         if (r.error) throw new Error(r.error.message || '创建失败');
         $('q-title').value = ''; $('q-desc').value = ''; $('q-outcomes').value = ''; $('q-odds').value = '';
@@ -796,7 +862,13 @@ var OnlineApp = (function () {
 
   /* ---------- 动作：借贷 ---------- */
   function borrow(amount) {
-    var chk = LoanCore.canBorrowOf(state.uid, amount, state.bets, state.loans, state.settings);
+    var bSettings = state.settings;
+    if (typeof VipCore !== 'undefined' && state.vip && VipCore.isActive(state.vip, Date.now())) {
+      var baseMax = LoanCore.params(state.settings).credit_max;
+      var vipSite = Object.assign({}, state.settings.site, { credit_max: VipCore.loanLimit(baseMax, state.vip, Date.now()) });
+      bSettings = Object.assign({}, state.settings, { site: vipSite });
+    }
+    var chk = LoanCore.canBorrowOf(state.uid, amount, state.bets, state.loans, bSettings);
     if (!chk.ok) { alert(chk.reason); return; }
     var p = LoanCore.params(state.settings);
     if (!confirm('确认借款 ' + amount + ' 分？\n期限 ' + p.loan_term_days + ' 天，到期利息 ' +
@@ -858,12 +930,107 @@ var OnlineApp = (function () {
   function renderAll() {
     renderBanner();
     renderBadges();
+    renderPrizePool();
     if (state.view === 'hall') renderHall();
     if (state.view === 'board') renderBoard();
     if (state.view === 'index') renderIndex();
     if (state.view === 'mine') renderMine();
     if (state.view === 'debate') renderDebate();
     if (state.view === 'admin') renderAdmin();
+    if (state.view === 'store') renderStore();
+  }
+
+  function renderStore() {
+    var box = $('store-body');
+    if (!box) return;
+    if (typeof StoreCore === 'undefined' && typeof VipCore === 'undefined') { box.innerHTML = '<div class="q-empty">商城暂不可用</div>'; return; }
+    var html = '';
+    if (typeof VipCore !== 'undefined') {
+      html += '<div class="card rules-card"><div class="card-title">会员 VIP（积分购买，不可兑换真实货币）</div><div class="stat-row">';
+      VipCore.listTiers().forEach(function (t) {
+        html += '<div class="stat-card"><div class="stat-label">' + esc(t.name) + '</div>' +
+          '<div class="stat-value">' + t.price_points + ' 分 / ' + t.days + ' 天</div>' +
+          '<button class="btn btn-primary" style="width:auto;margin-top:6px" data-buy-vip="' + esc(t.id) + '">购买</button></div>';
+      });
+      html += '</div></div>';
+    }
+    if (typeof StoreCore !== 'undefined') {
+      html += '<div class="card rules-card"><div class="card-title">装饰商城（积分购买，买后积分消耗、不可退换/转让）</div><div class="stat-row">';
+      var owned = (state.userItems || []).map(function (r) { return r.item_id; });
+      var equippedMap = {};
+      (state.userItems || []).forEach(function (r) { if (r.equipped) equippedMap[r.item_id] = 1; });
+      StoreCore.listCosmetics().forEach(function (it) {
+        var own = owned.indexOf(it.id) !== -1;
+        var isEq = !!equippedMap[it.id];
+        var action = own
+          ? ('<p class="hint">' + (isEq ? '已装备' : '已拥有') + '</p>' + (isEq ? '' : '<button class="btn" style="width:auto;margin-top:6px" data-equip-item="' + esc(it.id) + '">装备</button>'))
+          : ('<button class="btn" style="width:auto;margin-top:6px" data-buy-item="' + esc(it.id) + '">购买</button>');
+        html += '<div class="stat-card"><div class="stat-label">' + esc(it.name) + '</div>' +
+          '<div class="stat-value">' + it.price + ' 分</div>' + action + '</div>';
+      });
+      html += '</div></div>';
+    }
+    box.innerHTML = html;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-buy-vip]'), function (b) {
+      b.addEventListener('click', function () { buyVip(b.getAttribute('data-buy-vip')); });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-buy-item]'), function (b) {
+      b.addEventListener('click', function () { buyCosmetic(b.getAttribute('data-buy-item')); });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-equip-item]'), function (b) {
+      b.addEventListener('click', function () { equipCosmetic(b.getAttribute('data-equip-item')); });
+    });
+  }
+
+  function buyVip(tierId) {
+    if (typeof VipCore === 'undefined') { alert('功能未加载'); return; }
+    var t = VipCore.tierDef(tierId);
+    if (!t) return;
+    if (totalPoints() < t.price_points) { alert('积分不足：需 ' + t.price_points + ' 分'); return; }
+    if (!confirm('用 ' + t.price_points + ' 积分购买「' + t.name + '」' + t.days + ' 天？（积分不可兑换真实货币）')) return;
+    var now = Date.now();
+    var row = VipCore.composeVipRow(state.uid, tierId, now, state.vip && state.vip.expires_at);
+    var spend = { qid: 'vip-' + tierId, uid: state.uid, nickname: state.nickname, outcome_id: tierId,
+      stake: 0, odds_at_bet: 0, status: 'won', kind: 'adjust', payout: -t.price_points,
+      placed_at: new Date().toISOString(), settled_at: new Date().toISOString() };
+    withCloud(function () {
+      var chain = cloud.database.from('jp_bets').insert(spend).then(function (r) { if (r && r.error) throw new Error(r.error.message || '扣分失败'); });
+      chain = chain.then(function () { return cloud.database.from('jp_vip').upsert(row, { onConflict: 'uid' }).then(function (r) { if (r && r.error) throw new Error(r.error.message || '写入VIP失败'); }); });
+      chain = chain.then(function () { loadVip().then(function () { renderAll(); }); });
+      return chain;
+    });
+  }
+
+  function buyCosmetic(itemId) {
+    if (typeof StoreCore === 'undefined') { alert('功能未加载'); return; }
+    var item = StoreCore.getItem(itemId);
+    if (!item) return;
+    var owned = (state.userItems || []).map(function (r) { return r.item_id; });
+    var chk = StoreCore.canBuy(totalPoints(), item, owned);
+    if (!chk.ok) { alert(chk.error); return; }
+    if (!confirm('用 ' + item.price + ' 积分购买「' + item.name + '」？（买后积分消耗、不可退换/转让）')) return;
+    var rows = StoreCore.composePurchase(state.uid, item, { nickname: state.nickname });
+    withCloud(function () {
+      var chain = cloud.database.from('jp_bets').insert(rows.spend).then(function (r) { if (r && r.error) throw new Error(r.error.message || '扣分失败'); });
+      chain = chain.then(function () { return cloud.database.from('jp_user_items').insert(rows.holding).then(function (r) { if (r && r.error) throw new Error(r.error.message || '发放失败'); }); });
+      chain = chain.then(function () { return cloud.database.from('jp_store_orders').insert(rows.order).then(function () {}); });
+      chain = chain.then(function () { loadUserItems().then(function () { renderAll(); }); });
+      return chain;
+    });
+  }
+
+  function equipCosmetic(itemId) {
+    if (typeof StoreCore === 'undefined') { alert('功能未加载'); return; }
+    var owned = (state.userItems || []).map(function (r) { return r.item_id; });
+    var chk = StoreCore.canEquip(owned, itemId);
+    if (!chk.ok) { alert(chk.error); return; }
+    var patch = StoreCore.composeEquipPatch(itemId);
+    withCloud(function () {
+      var chain = cloud.database.from('jp_user_items').update({ equipped: false }).eq('uid', state.uid).eq('equipped', true).then(function () {});
+      chain = chain.then(function () { return cloud.database.from('jp_user_items').update(patch).eq('item_id', itemId).eq('uid', state.uid).then(function () {}); });
+      chain = chain.then(function () { loadUserItems().then(function () { renderAll(); }); });
+      return chain;
+    });
   }
 
   function renderBanner() {
@@ -882,6 +1049,12 @@ var OnlineApp = (function () {
       el.style.display = 'none';
       el.textContent = '';
     }
+  }
+
+  function renderPrizePool() {
+    var el = $('prize-pool');
+    if (!el) return;
+    el.textContent = '公共奖池 ' + poolBalance() + ' 分（抽水 60% 入池，用于赛事 / 月榜奖励）';
   }
 
   function renderBadges() {
@@ -2755,10 +2928,83 @@ var OnlineApp = (function () {
       statCard('未收回本息', Math.round(outstanding * 10) / 10 + ' 分') +
       statCard('逾期借款', overdueN + ' 笔') +
       statCard('利息池', '已收 ' + pool + ' / 可分配 ' + balance) +
-      '</div>';
+      '</div>' +
+      '<div class="card-title" style="margin-top:12px">公共奖池发放</div>' +
+      '<p class="hint">当前奖池余额 ' + poolBalance() + ' 分（抽水 60% 入池）。发放奖励 = 给该玩家加积分（bonus）并扣减奖池。</p>' +
+      '<div class="field"><label>收款人 uid</label><input id="pool-uid" placeholder="填玩家 uid"></div>' +
+      '<div class="field"><label>金额（分）</label><input id="pool-amt" type="number" min="1"></div>' +
+      '<div class="field"><label>事由</label><input id="pool-reason" placeholder="如：十月榜奖励 / 赛事冠军"></div>' +
+      '<button class="btn btn-primary" id="btn-pool-grant" style="width:auto">发放奖励</button>' +
+      '<div class="card-title" style="margin-top:12px">月榜发放（本月收益榜）</div>' +
+      '<div class="field"><label>发放总额（分）</label><input id="monthly-amt" type="number" min="1"></div>' +
+      '<button class="btn" id="btn-monthly-grant" style="width:auto">按本月收益榜发放</button>';
+    if (typeof MonthlyCore !== 'undefined') {
+      var mHint = MonthlyCore.autoHint(state.prizePoolLog, Date.now());
+      if (mHint && mHint.due) {
+        box.innerHTML += '<p class="hint">上月榜（' + esc(mHint.key) + '）待发放。</p>' +
+          '<button class="btn" id="btn-monthly-prev" style="width:auto">发放上月榜（' + esc(mHint.key) + '）</button>';
+        var pb = $('btn-monthly-prev');
+        if (pb) pb.addEventListener('click', function () { distributeMonthly(mHint.key); });
+      }
+    }
+    var gb = $('btn-pool-grant');
+    if (gb) gb.addEventListener('click', grantPoolReward);
+    var mb = $('btn-monthly-grant');
+    if (mb) mb.addEventListener('click', distributeMonthly);
   }
   function statCard(label, value) {
     return '<div class="stat-card"><div class="stat-label">' + esc(label) + '</div><div class="stat-value">' + esc(value) + '</div></div>';
+  }
+
+  /* 从公共奖池发放奖励：给指定 uid 加积分（bonus）+ 记录奖池出账 */
+  function grantPoolReward() {
+    var uid = (($('pool-uid') || {}).value || '').trim();
+    var amt = Math.floor(Number(($('pool-amt') || {}).value) || 0);
+    var reason = (($('pool-reason') || {}).value || '').trim() || '奖池奖励';
+    if (!uid) { alert('请填写收款人 uid'); return; }
+    if (!(amt > 0)) { alert('金额需大于 0'); return; }
+    if (amt > poolBalance()) { alert('奖池余额不足：当前 ' + poolBalance() + ' 分'); return; }
+    var now = new Date().toISOString();
+    withCloud(function () {
+      var chain = cloud.database.from('jp_bets').insert({
+        qid: 'pool-' + Date.now().toString(36), uid: uid, nickname: '',
+        outcome_id: 'reward', stake: 0, odds_at_bet: 0, status: 'won', kind: 'bonus',
+        payout: amt, placed_at: now, settled_at: now
+      }).then(function (r) { if (r && r.error) throw new Error(r.error.message || '发放失败'); });
+      chain = chain.then(function () {
+        return cloud.database.from('jp_prize_pool_log').insert({
+          amount: -amt, reason: reason, ref_event: 'reward', actor_uid: state.uid, meta: { to: uid }
+        }).then(function () {});
+      });
+      return chain;
+    });
+  }
+
+  /* 月榜自动发放：按本月已结算投注的收益榜，从奖池按名次权重分钱 */
+  function distributeMonthly(keyOverride) {
+    if (typeof MonthlyCore === 'undefined') { alert('功能未加载'); return; }
+    var amt = Math.floor(Number(($('monthly-amt') || {}).value) || 0);
+    if (!(amt > 0)) { alert('请输入发放总额'); return; }
+    var key = keyOverride || MonthlyCore.monthKey(Date.now());
+    if ((state.prizePoolLog || []).some(function (r) { return r.reason === 'monthly_reward' && r.ref_event === key; })) {
+      alert('本月榜已发放过（' + key + '），如需重发请先冲正。'); return;
+    }
+    var ranking = MonthlyCore.monthlyRanking(state.bets, Date.now(), { key: key });
+    var plan = MonthlyCore.buildPayoutPlan(ranking, amt, { topN: 10 });
+    var v = MonthlyCore.validatePlan(plan, poolBalance());
+    if (!v.ok) { alert(v.error); return; }
+    if (!plan.length) { alert('本月没有可发放的盈利玩家'); return; }
+    if (!confirm('确认发放 ' + key + ' 月榜：' + plan.length + ' 人 / 合计 ' + MonthlyCore.planTotal(plan) + ' 分？')) return;
+    var rows = MonthlyCore.composeRewardRows(plan, key, new Date().toISOString(), { actorUid: state.uid });
+    withCloud(function () {
+      var chain = Promise.resolve();
+      rows.forEach(function (r) {
+        chain = chain.then(function () { return cloud.database.from('jp_bets').insert(r.bonusRow).then(function (x) { if (x && x.error) throw new Error(x.error.message); }); })
+          .then(function () { return cloud.database.from('jp_prize_pool_log').insert(r.poolRow).then(function () {}); });
+      });
+      chain = chain.then(function () { loadPrizePool().then(function () { renderAll(); }); });
+      return chain;
+    });
   }
 
   /* 待平台检索 / 待揭晓队列 + AI 辅助判定 */

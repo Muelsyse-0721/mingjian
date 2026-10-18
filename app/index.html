@@ -1,236 +1,239 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="zh-CN" data-page-node-id="sNqzXBazzAP2xhC4Pe5ZN7">
+<head data-page-node-id="fZDKhGQvBiHZ8UJoEblCcN">
+<meta charset="UTF-8" data-page-node-id="DFYOqxG6p5zV2b3pNyNlwt">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="TUTrZZT4XMyPAVEJ7O6M2C">
 <title>明鉴 · 联机下注大厅</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css" data-page-node-id="jJHjUkQyUcAhEpGyLz8mr2">
 </head>
-<body>
+<body data-page-node-id="j2cXNqsHnRoYUho7Drt0B0">
 
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-name">明鉴 · 联机版</span>
-    <span class="brand-sub">联机版 v1.2 · 预测下注 + 对线房 + 信用借贷 + 赛季徽章 + 证据站 + 社区仲裁 + 预期指数 + 公投揭晓 + 天梯榜</span>
+<header class="topbar" data-page-node-id="tga9l1M9dDbrDNQGCVdBuz">
+  <div class="brand" data-page-node-id="6JuyWix9k0zPbTNfF6q5lg">
+    <span class="brand-name" data-page-node-id="pd01IpwKwN54vPOAVAsdcK">明鉴 · 联机版</span>
+    <span class="brand-sub" data-page-node-id="mC0df4GlRvOFducOD837Sw">联机版 v1.2 · 预测下注 + 对线房 + 信用借贷 + 赛季徽章 + 证据站 + 社区仲裁 + 预期指数 + 公投揭晓 + 天梯榜</span>
   </div>
-  <div class="topbar-right">
-    <span class="engine-badge" id="conn-badge">连接中…</span>
-    <button class="btn" id="btn-nick">昵称：<span id="nick-view">…</span></button>
+  <div class="topbar-right" data-page-node-id="SMwtLs5ioGFeuI5CsaK1rr">
+    <span class="engine-badge" id="conn-badge" data-page-node-id="J8DbhuShVwHEUiuJVTkyWv">连接中…</span>
+    <button class="btn" id="btn-nick" data-page-node-id="SBAnJI2QJjud0A1LwUoSUL">昵称：<span id="nick-view" data-page-node-id="BmvQ7sAi8A4dhqNMxv4O3p">…</span></button>
   </div>
 </header>
 
-<nav class="mainnav">
-  <button class="nav-btn active" data-view="hall">下注大厅</button>
-  <button class="nav-btn" data-view="debate">对线房</button>
-  <button class="nav-btn" data-view="board">天梯榜</button>
-  <button class="nav-btn" data-view="index">预期指数</button>
-  <button class="nav-btn" data-view="mine">我的战绩</button>
-  <button class="nav-btn" data-view="admin">站长台</button>
+<nav class="mainnav" data-page-node-id="zOPTGGDlA66qlsm7hXD8Fa">
+  <button class="nav-btn active" data-view="hall" data-page-node-id="iLhcQkTtwfcDsHUODXKuj4">下注大厅</button>
+  <button class="nav-btn" data-view="debate" data-page-node-id="eGjVm7X8ITFZ6qlUOm0YkU">对线房</button>
+  <button class="nav-btn" data-view="board" data-page-node-id="4cMlE0Pl24KSMGjFbZ1yXJ">天梯榜</button>
+  <button class="nav-btn" data-view="index" data-page-node-id="cs4UZKcdvTbGbyEk04O2Ag">预期指数</button>
+  <button class="nav-btn" data-view="mine" data-page-node-id="eDWhk2UBAhsUgM3hZjP4Mo">我的战绩</button>
+  <button class="nav-btn" data-view="store" data-page-node-id="PssugHKmwvzEGpQCjjnxJZ">商城</button>
+  <button class="nav-btn" data-view="admin" data-page-node-id="NQdnTDIgMXSsbNCFkK8OGB">站长台</button>
 </nav>
 
-<div class="site-banner" id="site-banner" style="display:none"></div>
+<div class="site-banner" id="site-banner" style="display:none" data-page-node-id="pSrc5rYFy9WZKEymlLuUhX"></div>
 
-<main class="layout">
+<main class="layout" data-page-node-id="LCnlvdAokCpZ7k1dFWGLEU">
 
   <!-- ========== 视图一：下注大厅 ========== -->
-  <section class="view active" id="view-hall">
-    <div class="card rules-card">
-      <div class="card-title">明鉴是什么</div>
-      <ul class="rules-list">
-        <li><b>一个比「判断力」的地方</b>：对可验证的事实预测下注，凭战绩登上天梯榜。题目不评价任何具体的人，只看谁看得准。</li>
-        <li><b>初始积分</b>：每位玩家首次进入赠送 <b>1000 分</b>；积分不够时可以<b>借款</b>（信用额度 + 利息 + 逾期罚息，见「我的战绩」）。</li>
-        <li><b>彩池赔率</b>：赔率 = 总彩池 ×（1 − 5% 抽水）÷ 该选项彩池。彩池 = 主办方初始池 + 全体玩家真实投注，一边倒的选项赔率低、冷门赔率高。</li>
-        <li><b>固定赔率</b>：主办方预先设定，赔付 = 投注额 × 赔率。</li>
-        <li><b>揭晓</b>：截止后按建题时选定的方式结算，中奖按最终赔率派彩。已揭晓的问题永久留存在「已揭晓档案」。</li>
-        <li><b>三种揭晓方式</b>：① <b>平台检索</b>（默认）——能通过网络搜索核实的问题，到期后由平台联网查证公开事实并揭晓，任何人不能手动发起；② <b>公投揭晓</b>——主观议题（如「美国 2027 是否会衰落」），到期后进入公投窗口，一人一票，票数最高的选项为最终结果，平局则投注全额退还；③ <b>人工揭晓</b>——仅站长可建的 legacy 模式，任何人可按公开事实发起。</li>
-        <li><b>分区浏览</b>：大厅按「进行中 / 待平台检索 / 公投中 / 待人工揭晓 / 已揭晓档案」分区；支持按分类、截止时间筛选，按热度、发布时间、奖池等排序。</li>
-        <li><b>只押积分</b>：积分不可充值、不可提现、不可转让，与真实货币无关。</li>
+  <section class="view active" id="view-hall" data-page-node-id="f1NrBsnsrGf8iuvwwWR2Hs">
+    <div class="card rules-card" data-page-node-id="7KBYzFsk1eA4N61vWeYyPN">
+      <div class="card-title" data-page-node-id="TuaflNskjAet4WCLxxd1pI">明鉴是什么</div>
+      <ul class="rules-list" data-page-node-id="rHuoL09LuI79c0CLSkVj9m">
+        <li data-page-node-id="9KYSJLTtp5mE0MmJ0K7i4N"><b data-page-node-id="ZrSGatLtsr3pqrqYQ9IDkD">一个比「判断力」的地方</b>：对可验证的事实预测下注，凭战绩登上天梯榜。题目不评价任何具体的人，只看谁看得准。</li>
+        <li data-page-node-id="pUM32ec4mOmBNSmXIgxatF"><b data-page-node-id="HmO2hAllZAFcOqDCdTmbvd">初始积分</b>：每位玩家首次进入赠送 <b data-page-node-id="S1ufGrx6sjn7EAtEN4u8Os">1000 分</b>；积分不够时可以<b data-page-node-id="H8H3JW8u093Gx1FlPowb1v">借款</b>（信用额度 + 利息 + 逾期罚息，见「我的战绩」）。</li>
+        <li data-page-node-id="iRPyJC3XZQOGsXECNSYeIq"><b data-page-node-id="fWAfTOmSt3OFD9RzqHEHIZ">彩池赔率</b>：赔率 = 总彩池 ×（1 − 5% 抽水）÷ 该选项彩池。彩池 = 主办方初始池 + 全体玩家真实投注，一边倒的选项赔率低、冷门赔率高。</li>
+        <li data-page-node-id="1cm1EGKL6hpz4YdDtNViVl"><b data-page-node-id="F4HphQVyhgYKlCkGErZAbp">固定赔率</b>：主办方预先设定，赔付 = 投注额 × 赔率。</li>
+        <li data-page-node-id="7NDgvIeTmJd0qPNFWtLwPE"><b data-page-node-id="onmtKPyojjJ1CvmIqLz9r1">揭晓</b>：截止后按建题时选定的方式结算，中奖按最终赔率派彩。已揭晓的问题永久留存在「已揭晓档案」。</li>
+        <li data-page-node-id="QRd0DDw2XFhTOmz5Lz3TMe"><b data-page-node-id="6D7VBWr2OtnVsF4NiPHK1Y">三种揭晓方式</b>：① <b data-page-node-id="wH9b58o7eCsik7OkBJrT9e">平台检索</b>（默认）——能通过网络搜索核实的问题，到期后由平台联网查证公开事实并揭晓，任何人不能手动发起；② <b data-page-node-id="AQYOeBSIIzTuhboLQEx7Ve">公投揭晓</b>——主观议题（如「美国 2027 是否会衰落」），到期后进入公投窗口，一人一票，票数最高的选项为最终结果，平局则投注全额退还；③ <b data-page-node-id="enWfjwlbyr3eAnCJ3GOtAo">人工揭晓</b>——仅站长可建的 legacy 模式，任何人可按公开事实发起。</li>
+        <li data-page-node-id="svINMMgNhA1Io3Qbj1VXpv"><b data-page-node-id="uNRGo42xWmSxYNRH8uVklU">分区浏览</b>：大厅按「进行中 / 待平台检索 / 公投中 / 待人工揭晓 / 已揭晓档案」分区；支持按分类、截止时间筛选，按热度、发布时间、奖池等排序。</li>
+        <li data-page-node-id="RErogVwKuls4FJFpV2znPo"><b data-page-node-id="H9eftgCqvXLPzVFKfPGZzb">只押积分</b>：积分不可充值、不可提现、不可转让，与真实货币无关。</li>
       </ul>
     </div>
 
-    <div class="hall-tabs" id="hall-tabs"></div>
-    <div id="hall-toolbar"></div>
-    <div id="question-list"></div>
+    <div class="hall-tabs" id="hall-tabs" data-page-node-id="9WSKGMRDZ36ohWs1Z7E83t"></div>
+    <div class="hint" id="prize-pool" style="margin:6px 2px" data-page-node-id="3j53r7Q48AdDAm1IjISRVk"></div>
+    <div id="hall-toolbar" data-page-node-id="7SGITAgrx8V5O2LUpQXjm0"></div>
+    <div id="question-list" data-page-node-id="7dswl1ElPsuEAWTY3TNrAn"></div>
 
-    <div class="card">
-      <div class="card-title">新建问题</div>
-      <div class="field">
-        <label>问题标题（可验证的事实预测）</label>
-        <input type="text" id="q-title" placeholder="如：年底前某新政会落地吗？">
+    <div class="card" data-page-node-id="W1dCwrAHCtv0Xhw84eYIhW">
+      <div class="card-title" data-page-node-id="VVMK8hVXBPL8SFtJGhTtxz">新建问题</div>
+      <div class="field" data-page-node-id="8Li3fHRbKhPp9ztxum7fSf">
+        <label data-page-node-id="SPF3mXAr0J9iVnBiop5sVH">问题标题（可验证的事实预测）</label>
+        <input type="text" id="q-title" placeholder="如：年底前某新政会落地吗？" data-page-node-id="BPyBcj2ABxdwF5stCKDnNF">
       </div>
-      <div class="field">
-        <label>判定标准（揭晓时以什么为准）</label>
+      <div class="field" data-page-node-id="xNwGkk2K8ZtYXvtrSlGhdO">
+        <label data-page-node-id="oaGn0tG3eu2wx43B7ECZnl">判定标准（揭晓时以什么为准）</label>
         <textarea id="q-desc" rows="2" placeholder="如：以官方正式文件发布为准"></textarea>
       </div>
-      <div class="form-row">
-        <div class="field">
-          <label>赔率模式</label>
-          <select id="q-mode">
-            <option value="pool">彩池赔率（动态，抽水 5%）</option>
-            <option value="fixed">固定赔率（你设定）</option>
+      <div class="form-row" data-page-node-id="iR1g6HDvlIuRGnv0jmyviL">
+        <div class="field" data-page-node-id="FDH04XLUQ0Us9NvWCWSrWz">
+          <label data-page-node-id="vVNZYuIozOIi3AQfzoZ0Ho">赔率模式</label>
+          <select id="q-mode" data-page-node-id="hGjCHgB0r2H13IqKJZbz3E">
+            <option value="pool" data-page-node-id="EdzwF5S9HMLo8wuKAWYSSx">彩池赔率（动态，抽水 5%）</option>
+            <option value="fixed" data-page-node-id="pEC356Jnd8eKlIDRCN11me">固定赔率（你设定）</option>
           </select>
         </div>
-        <div class="field">
-          <label>截止日期</label>
-          <input type="date" id="q-deadline">
+        <div class="field" data-page-node-id="MwEpN6mqp3GxnIbO5BaV6e">
+          <label data-page-node-id="D3HDoYl76M31PyxTOE1R7E">截止日期</label>
+          <input type="date" id="q-deadline" data-page-node-id="poXhDn4ZFdMwXg1svLhXrM">
         </div>
       </div>
-      <div class="form-row">
-        <div class="field">
-          <label>分类标签</label>
-          <select id="q-cat">
-            <option value="科技">科技</option>
-            <option value="财经">财经</option>
-            <option value="体育">体育</option>
-            <option value="娱乐">娱乐</option>
-            <option value="社会">社会</option>
-            <option value="消费">消费</option>
-            <option value="游戏">游戏</option>
-            <option value="交通">交通</option>
-            <option value="教育">教育</option>
-            <option value="自然">自然</option>
-            <option value="民生">民生</option>
-            <option value="国际">国际</option>
-            <option value="未分类">未分类</option>
+      <div class="form-row" data-page-node-id="DoFmNLs5fnEzjiPVwm7lXG">
+        <div class="field" data-page-node-id="iBGTOvcL4SoJtLMZ27MFdX">
+          <label data-page-node-id="3TEmfriiHetPaY4THyQf92">分类标签</label>
+          <select id="q-cat" data-page-node-id="zmUvUj3xuW6q6qvoIAwrDy">
+            <option value="科技" data-page-node-id="FjnZWsYWbYEmn2gh365AAg">科技</option>
+            <option value="财经" data-page-node-id="m6X2cGfdxP4pEjO0trEb6s">财经</option>
+            <option value="体育" data-page-node-id="HTENu6EAsQAu5NKVVNtM6p">体育</option>
+            <option value="娱乐" data-page-node-id="wuMIQPAiyQcQ3IMxaT1N10">娱乐</option>
+            <option value="社会" data-page-node-id="tadp9vqbpcES5KY6BawClB">社会</option>
+            <option value="消费" data-page-node-id="3fEzXhldFB2J1El00hnp7W">消费</option>
+            <option value="游戏" data-page-node-id="3nqbPjcGtIl20BJRHgGNx4">游戏</option>
+            <option value="交通" data-page-node-id="0MIo0YEFaRSBfU0ugjrPGy">交通</option>
+            <option value="教育" data-page-node-id="ufQdCRPJmD2pHf9XAvulSE">教育</option>
+            <option value="自然" data-page-node-id="tvmn9Pq5smfkZUsND0hjAN">自然</option>
+            <option value="民生" data-page-node-id="Ex90b7TfKz8i6gM7nBpdml">民生</option>
+            <option value="国际" data-page-node-id="JQ9XKtBaAQpGJSkvnm6OSL">国际</option>
+            <option value="未分类" data-page-node-id="GyODkbileLG3iAuSheaqe3">未分类</option>
           </select>
         </div>
-        <div class="field">
-          <label>揭晓方式</label>
-          <select id="q-settle">
-            <option value="search">平台检索（默认：到期后平台联网查证公开事实并揭晓）</option>
-            <option value="vote">公投揭晓（主观议题：到期后一人一票，多数决）</option>
-            <option value="manual" id="q-settle-manual">人工揭晓（仅站长）</option>
+        <div class="field" data-page-node-id="XaXWqUI2y7NZ8GVJts59F7">
+          <label data-page-node-id="kbPJQZXF1928Xz2W0HNVcx">揭晓方式</label>
+          <select id="q-settle" data-page-node-id="hZBGtD3m4ARi8RaWF7IooT">
+            <option value="search" data-page-node-id="x3nWjtSSGJkuooZZzvXem8">平台检索（默认：到期后平台联网查证公开事实并揭晓）</option>
+            <option value="vote" data-page-node-id="MhMoAj7z0nM8CK4yqb1BbS">公投揭晓（主观议题：到期后一人一票，多数决）</option>
+            <option value="manual" id="q-settle-manual" data-page-node-id="ik4XBjtlVmy9nkOu8lIQXz">人工揭晓（仅站长）</option>
           </select>
         </div>
       </div>
-      <div class="field" id="q-vote-end-field" style="display:none">
-        <label>公投截止日期（投注截止后进入公投，建议晚 7 天以上）</label>
-        <input type="date" id="q-vote-end">
+      <div class="field" id="q-vote-end-field" style="display:none" data-page-node-id="02ifwBPE7PRqhmpcCW6dNq">
+        <label data-page-node-id="n5Z94t2jHpppjH0m5pltpc">公投截止日期（投注截止后进入公投，建议晚 7 天以上）</label>
+        <input type="date" id="q-vote-end" data-page-node-id="MVOmHxTr1tYOW98ImCqZmQ">
       </div>
-      <div class="field">
-        <label>选项（每行一个，2-4 个）</label>
+      <div class="field" data-page-node-id="lLZfDeUXoI7qep0B6QpLOu">
+        <label data-page-node-id="9hV0qO9dZz7UUZyv76qUOe">选项（每行一个，2-4 个）</label>
         <textarea id="q-outcomes" rows="3" placeholder="会&#10;不会"></textarea>
       </div>
-      <div class="field" id="q-odds-field" style="display:none">
-        <label>固定赔率（与选项一一对应，逗号分隔，如 2.0,1.8）</label>
-        <input type="text" id="q-odds" placeholder="2.0,1.8">
+      <div class="field" id="q-odds-field" style="display:none" data-page-node-id="4t3EAtk3rWFA7eZOhNQN1q">
+        <label data-page-node-id="ylu0NHW4GjjfVPU1AKbZ4d">固定赔率（与选项一一对应，逗号分隔，如 2.0,1.8）</label>
+        <input type="text" id="q-odds" placeholder="2.0,1.8" data-page-node-id="u5jxgUrXiXnUPDxbqbradG">
       </div>
-      <label class="check-row"><input type="checkbox" id="q-simpool" checked> 放入主办方初始池（每选项 1000 分，让赔率有基准）</label>
-      <button class="btn btn-primary" id="btn-create-q">创建问题</button>
+      <label class="check-row" data-page-node-id="ghdIznanAz9qdvBxqoNS4v"><input type="checkbox" id="q-simpool" checked data-page-node-id="3hfCvQA8TAQIifYJWWlRBN"> 放入主办方初始池（每选项 1000 分，让赔率有基准）</label>
+      <button class="btn btn-primary" id="btn-create-q" data-page-node-id="iNlkTkmcID9x3kxeqypcI2">创建问题</button>
     </div>
   </section>
 
   <!-- ========== 视图二：对线房 ========== -->
-  <section class="view" id="view-debate">
-    <div id="debate-list"></div>
-    <div id="debate-room"></div>
+  <section class="view" id="view-debate" data-page-node-id="r9NwRemAudHzBUBH4cZS7Q">
+    <div id="debate-list" data-page-node-id="MpYmPeKqig711ddjlhpagJ"></div>
+    <div id="debate-room" data-page-node-id="799kuwZSJii8PoFLBowYI4"></div>
   </section>
 
   <!-- ========== 视图三：天梯榜 ========== -->
-  <section class="view" id="view-board">
-    <div id="board-list"></div>
+  <section class="view" id="view-board" data-page-node-id="S8MCJloqA4hPYrvN1N975J">
+    <div id="board-list" data-page-node-id="piDtztGSgorwQIcIoU2RUI"></div>
   </section>
 
   <!-- ========== 视图：预期指数 ========== -->
-  <section class="view" id="view-index">
-    <div id="index-list"></div>
+  <section class="view" id="view-index" data-page-node-id="BN7hzhlvWiPng0yqX03m81">
+    <div id="index-list" data-page-node-id="WLecNU4rGTpDkaXgHzMmmW"></div>
   </section>
 
   <!-- ========== 视图四：我的战绩 ========== -->
-  <section class="view" id="view-mine">
-    <div id="mine-stats"></div>
-    <div class="card" id="loan-card"></div>
-    <div class="card" id="season-card"></div>
-    <div class="card" id="badge-card"></div>
-    <div class="card">
-      <div class="card-title">我的投注</div>
-      <div id="mine-bets"></div>
+  <section class="view" id="view-mine" data-page-node-id="uzeA8EDXdOiCrvKbiJps3v">
+    <div id="mine-stats" data-page-node-id="FbuHyEU3Q39ef09xH20Q0Q"></div>
+    <div class="card" id="loan-card" data-page-node-id="mi2G4K3kgJN2ey7FNM2zHr"></div>
+    <div class="card" id="season-card" data-page-node-id="TvECnjSjISEQOCGSZTFAmj"></div>
+    <div class="card" id="badge-card" data-page-node-id="pDqxHNrMnDXM8FFKCLdjyb"></div>
+    <div class="card" data-page-node-id="sO0vjT88LtkrHdso1sRDS8">
+      <div class="card-title" data-page-node-id="lgdMDypvSKgFICEfglDZLY">我的投注</div>
+      <div id="mine-bets" data-page-node-id="0cVjAEqlJnNINEG8svCvmG"></div>
     </div>
-    <div class="card">
-      <div class="card-title">战绩回顾 · 积分流水</div>
-      <div id="mine-ledger"></div>
+    <div class="card" data-page-node-id="JOUfVvkVJaEKewBkHs8lME">
+      <div class="card-title" data-page-node-id="FtAeOImobBpMEwrFPWCAwR">战绩回顾 · 积分流水</div>
+      <div id="mine-ledger" data-page-node-id="cG5HZFNzUb9cGGY9U8ZGSq"></div>
     </div>
   </section>
 
   <!-- ========== 视图四：站长控制台 ========== -->
-  <section class="view" id="view-admin">
-    <div id="admin-gate"></div>
-    <div id="admin-body" style="display:none">
-      <div class="card">
-        <div class="card-title">站内概览</div>
-        <div id="admin-stats"></div>
+  <section class="view" id="view-store" data-page-node-id="wGM7dENuFoR5Qbak4L44Dn"><div id="store-body" data-page-node-id="NQ2hqN29Kbvxja6r6FZ5Cd"></div></section>
+  <section class="view" id="view-admin" data-page-node-id="djTdHpCH55XxYzBzxA2ovg">
+    <div id="admin-gate" data-page-node-id="lMV5GaeJIpn3fJcmlFyayP"></div>
+    <div id="admin-body" style="display:none" data-page-node-id="2Is2cgyTxRIMHorrLmGF3H">
+      <div class="card" data-page-node-id="4pyZCD0PRFbsnQn1CA47Jv">
+        <div class="card-title" data-page-node-id="f67rFfWOL8RbP3Bpiylibj">站内概览</div>
+        <div id="admin-stats" data-page-node-id="dB11BEnb04SCB6RMQ8gJKW"></div>
       </div>
-      <div class="card">
-        <div class="card-title">到期问题 · 自动进入待揭晓</div>
-        <div id="admin-pending"></div>
+      <div class="card" data-page-node-id="FFvt2yMPaFxc5SKd64uEpz">
+        <div class="card-title" data-page-node-id="9Ub3QXfbMJWzhILqq4GVaB">到期问题 · 自动进入待揭晓</div>
+        <div id="admin-pending" data-page-node-id="ZY92fHOKGCNBLOPWfzBoMS"></div>
       </div>
-      <div class="card">
-        <div class="card-title">借贷管理（未结清借款）</div>
-        <div id="admin-loans"></div>
+      <div class="card" data-page-node-id="7YMaBxdmv2jQNVCw4a1D9W">
+        <div class="card-title" data-page-node-id="LJisIyBHAMVJEnmt6UcYNt">借贷管理（未结清借款）</div>
+        <div id="admin-loans" data-page-node-id="MVHTyBf4nz4tVpeGsDTFxy"></div>
       </div>
-      <div class="card">
-        <div class="card-title">证据审核队列（采纳 / 驳回）</div>
-        <div id="admin-evidence"></div>
+      <div class="card" data-page-node-id="rF9u32dSHQy1tfK4hvvDXq">
+        <div class="card-title" data-page-node-id="XBjKJu8B8I76OadOkzZmC4">证据审核队列（采纳 / 驳回）</div>
+        <div id="admin-evidence" data-page-node-id="LEtN5kI5EvRnDmlCp06zK5"></div>
       </div>
-      <div class="card">
-        <div class="card-title">对线房管理（下架 / 强制揭晓）</div>
-        <div id="admin-debates"></div>
+      <div class="card" data-page-node-id="Fs2mOtkHBaFiLVjtOBO5kU">
+        <div class="card-title" data-page-node-id="O3tl7AxllUDN8nmt73W9TI">对线房管理（下架 / 强制揭晓）</div>
+        <div id="admin-debates" data-page-node-id="LHM91TF2vWa4aG8VzFGzJ4"></div>
       </div>
-      <div class="card">
-        <div class="card-title">仲裁队列（社区裁决 → 执行改判 / 驳回）</div>
-        <div id="admin-disputes"></div>
+      <div class="card" data-page-node-id="C5CxfwkeBagFHByDFx5RCH">
+        <div class="card-title" data-page-node-id="LFmfUEMhDHaWtC92Z4iduz">仲裁队列（社区裁决 → 执行改判 / 驳回）</div>
+        <div id="admin-disputes" data-page-node-id="LGhSO5tNUhTlrstez8CxI8"></div>
       </div>
-      <div class="card">
-        <div class="card-title">问题管理（置顶 / 下架 / 注入利息池 / 删除）</div>
-        <div id="admin-questions"></div>
+      <div class="card" data-page-node-id="uuWLCLVrTHAjYHUASrpy4T">
+        <div class="card-title" data-page-node-id="INNunbRrvfgm8gz3zv64ug">问题管理（置顶 / 下架 / 注入利息池 / 删除）</div>
+        <div id="admin-questions" data-page-node-id="IN4J0lWrqbmt6WvNn9lVZd"></div>
       </div>
-      <div class="card" id="admin-settings"></div>
+      <div class="card" id="admin-settings" data-page-node-id="8S65gwF4JFMiB7F2FJ4ott"></div>
     </div>
   </section>
 
 </main>
 
 <!-- 昵称弹窗（降级 / 测试路径；线上走电话登录） -->
-<div class="modal-mask" id="nick-mask">
-  <div class="modal" style="max-width:380px">
-    <div class="modal-title">先起个名号</div>
-    <div class="field">
-      <label>昵称（将展示在天梯榜和投注记录中）</label>
-      <input type="text" id="nick-input" maxlength="12" placeholder="2-12 个字符">
+<div class="modal-mask" id="nick-mask" data-page-node-id="5mXh68G2lj31TYXbRl1fb3">
+  <div class="modal" style="max-width:380px" data-page-node-id="qHJLBtQ0hKSLdNqltxatT5">
+    <div class="modal-title" data-page-node-id="P6MtklNjwD8Leon95sNvAz">先起个名号</div>
+    <div class="field" data-page-node-id="DMuSjMnLQF0Wuk6Q4mEXl0">
+      <label data-page-node-id="2LEGWE2UbQbADWHseolQUx">昵称（将展示在天梯榜和投注记录中）</label>
+      <input type="text" id="nick-input" maxlength="12" placeholder="2-12 个字符" data-page-node-id="EuzRnqIzXCxEqOXaETJqvP">
     </div>
-    <p class="hint">免登录游玩：身份只保存在本机浏览器，清缓存会丢失（战绩仍在云端，可用同昵称+同设备找回）。</p>
-    <div class="modal-actions">
-      <button class="btn btn-primary" id="btn-nick-save" style="width:auto">进入下注大厅</button>
+    <p class="hint" data-page-node-id="tgpcmgMn4zElRF8AzUEN78">免登录游玩：身份只保存在本机浏览器，清缓存会丢失（战绩仍在云端，可用同昵称+同设备找回）。</p>
+    <div class="modal-actions" data-page-node-id="uHOJ8YlBJmHmD5tMmUAK7H">
+      <button class="btn btn-primary" id="btn-nick-save" style="width:auto" data-page-node-id="z2HDFTHtLODefIp56KPVsD">进入下注大厅</button>
     </div>
   </div>
 </div>
 
 <!-- 电话登录弹窗 -->
-<div class="modal-mask" id="login-mask">
-  <div class="modal" style="max-width:380px">
-    <div class="modal-title">电话登录 · 明鉴</div>
-    <p class="hint">绑定手机号登录，战绩与身份更安全。新用户将引导设置名号。</p>
-    <div class="field">
-      <label>手机号</label>
-      <input type="tel" id="login-phone" maxlength="11" placeholder="11 位手机号" inputmode="numeric">
-      <p class="err" id="login-phone-err"></p>
+<div class="modal-mask" id="login-mask" data-page-node-id="q2GG8by6AXHvgIzWjaPwxD">
+  <div class="modal" style="max-width:380px" data-page-node-id="GXzxlwIVPuQfDwuCHXYMQI">
+    <div class="modal-title" data-page-node-id="qZzE83EnS4cyIaQVPyJBvS">电话登录 · 明鉴</div>
+    <p class="hint" data-page-node-id="hJmNDqqzAYBHWmVGvPvptp">绑定手机号登录，战绩与身份更安全。新用户将引导设置名号。</p>
+    <div class="field" data-page-node-id="60NVz11cmJBAifkbbZ56us">
+      <label data-page-node-id="hKwKxbAPoaYjKP1Hlfj2Qe">手机号</label>
+      <input type="tel" id="login-phone" maxlength="11" placeholder="11 位手机号" inputmode="numeric" data-page-node-id="spEfxmYUqFgiWWxRPenfl7">
+      <p class="err" id="login-phone-err" data-page-node-id="Fy63DvAmQYDiIM8yJdLTHp"></p>
     </div>
-    <div class="field">
-      <button class="btn" type="button" id="btn-send-code" style="width:auto">获取验证码</button>
-      <span id="login-countdown" class="hint"></span>
+    <div class="field" data-page-node-id="DaPHhozri9XZNNiSE4EAxb">
+      <button class="btn" type="button" id="btn-send-code" style="width:auto" data-page-node-id="nFajLnaEd1N2tIrk4TFrH2">获取验证码</button>
+      <span id="login-countdown" class="hint" data-page-node-id="5gwO7f5OT0Yud53NfAwWRr"></span>
     </div>
-    <div class="field" id="login-code-field" style="display:none">
-      <label>验证码</label>
-      <input type="text" id="login-code" maxlength="6" placeholder="短信验证码" inputmode="numeric">
+    <div class="field" id="login-code-field" style="display:none" data-page-node-id="mqrXEjbt7Pls6fQmq2BRz4">
+      <label data-page-node-id="iiNmfDFKoaRC6CJpCKWaLK">验证码</label>
+      <input type="text" id="login-code" maxlength="6" placeholder="短信验证码" inputmode="numeric" data-page-node-id="izfs5qZiPTepuBX2j5RwoX">
     </div>
-    <div class="field" id="login-nick-field" style="display:none">
-      <label>设置名号（2-12 字，展示在天梯榜与战绩）</label>
-      <input type="text" id="login-nick" maxlength="12" placeholder="如：观察员甲">
+    <div class="field" id="login-nick-field" style="display:none" data-page-node-id="WKlp6DxNdhHvUyC9uydcSA">
+      <label data-page-node-id="kkKpyjkLr8NcCJ6k7NQRbF">设置名号（2-12 字，展示在天梯榜与战绩）</label>
+      <input type="text" id="login-nick" maxlength="12" placeholder="如：观察员甲" data-page-node-id="SIS1ghLpIw0PHwK5RpFj32">
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" id="btn-login" style="width:auto">登录 / 注册</button>
+    <div class="modal-actions" data-page-node-id="AloYnfPkxY0Kp0km1Ia1Cv">
+      <button class="btn btn-primary" id="btn-login" style="width:auto" data-page-node-id="Ps0jHU6BMd2CwDGidVDEUi">登录 / 注册</button>
     </div>
-    <p class="err" id="login-err"></p>
+    <p class="err" id="login-err" data-page-node-id="86byFcxAEZRSCO0n0Rws9J"></p>
   </div>
 </div>
 
@@ -251,6 +254,9 @@
 <script src="js/audit.js"></script>
 <script src="js/antifraud.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/store.js"></script>
+<script src="js/vip.js"></script>
+<script src="js/monthly.js"></script>
 <script src="js/online.js"></script>
 </body>
 </html>

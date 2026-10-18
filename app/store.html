@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>明鉴 · 积分商城（装饰消耗 · 独立演示页）</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/store.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">明鉴</span>
+    <span class="brand-sub">积分商城 · 装饰消耗（独立演示页，不连线上）</span>
+  </div>
+  <div class="topbar-right">
+    <span class="engine-badge" id="uid-badge">演示 uid：—</span>
+  </div>
+</header>
+
+<main class="store-wrap">
+
+  <section class="store-hero">
+    <h1>用积分换装饰，积分只出不回</h1>
+    <p>商城只有装饰：名讳颜色、头像框、主题、称号。买下的积分立即销毁，装饰不可转卖、不可回售、不可换回积分。</p>
+    <div class="store-redline">
+      ★ 积分是应用内分值：不可充值、不可提现、不可转让、不可兑换法币。本页为纯前端演示，购买为 mock，不写入任何数据库。
+    </div>
+  </section>
+
+  <section class="store-wallet" aria-label="积分余额">
+    <div class="wallet-main">
+      <div class="wallet-label">可用积分（演示余额）</div>
+      <div class="wallet-value" id="wallet-value">1000</div>
+    </div>
+    <div class="wallet-side">
+      <div class="wallet-row"><span>已购装饰</span><b id="owned-count">0</b></div>
+      <div class="wallet-row"><span>累计消耗</span><b id="spent-total">0</b></div>
+      <div class="wallet-row"><span>余额口径</span><b>LoanCore.cashOf</b></div>
+    </div>
+  </section>
+
+  <h2 class="store-section-title">装饰目录</h2>
+  <p class="store-section-sub">纯视觉，不带来任何数值或功能优势。</p>
+  <div class="store-filters" id="store-filters" role="tablist"></div>
+  <div class="store-grid" id="store-grid"></div>
+
+  <h2 class="store-section-title">本次组装的台账行（演示）</h2>
+  <p class="store-section-sub">
+    购买一次会产生三行：<code>jp_store_orders</code>（订单留痕）、<code>jp_user_items</code>（持有关系）、
+    <code>jp_bets</code>（扣分台账，<code>kind='adjust'</code> + 负 <code>payout</code>）。以下为 store.js 组装结果。
+  </p>
+  <pre class="store-code" id="row-preview">（点击「购买」后显示）</pre>
+
+  <p class="store-foot">
+    真实接线由 online.js 完成：先扣分 → 再发放装饰 → 最后落订单。任一环节失败都不退回积分（避免形成回售通道），
+    只留痕待人工补发。
+  </p>
+
+</main>
+
+<div class="store-toast" id="store-toast" role="status" aria-live="polite"></div>
+
+<!-- 仅引入纯函数模块，不引入 online.js / app.js / auth.js -->
+<script src="js/store.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var DEMO_UID = 'demo-' + Math.random().toString(36).slice(2, 8);
+  var START_BALANCE = 1000;        /* 与 DEFAULT_SETTINGS.opening_bonus 一致 */
+  var balance = START_BALANCE;
+  var owned = [];
+  var spent = 0;
+  var filter = '';
+
+  var elGrid = document.getElementById('store-grid');
+  var elFilters = document.getElementById('store-filters');
+  var elBalance = document.getElementById('wallet-value');
+  var elOwned = document.getElementById('owned-count');
+  var elSpent = document.getElementById('spent-total');
+  var elPreview = document.getElementById('row-preview');
+  var elToast = document.getElementById('store-toast');
+  var elBadge = document.getElementById('uid-badge');
+
+  if (typeof StoreCore === 'undefined') {
+    elGrid.innerHTML = '<div class="store-empty">StoreCore 未加载：请确认 js/store.js 可访问。</div>';
+    return;
+  }
+  elBadge.textContent = '演示 uid：' + DEMO_UID;
+
+  var toastTimer = null;
+  function toast(msg, bad) {
+    elToast.textContent = msg;
+    elToast.className = 'store-toast show' + (bad ? ' bad' : '');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { elToast.className = 'store-toast'; }, 2200);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* 把 payload 渲染成一小块视觉预览 */
+  function previewHtml(item) {
+    var p = item.payload || {};
+    if (p.type === 'namecolor') {
+      return '<span class="pv-name" style="color:' + esc(p.color) + ';font-weight:' + (p.weight || 500) + '">'
+        + esc('你的昵称') + '</span>';
+    }
+    if (p.type === 'frame') {
+      var w = p.ring === 'double' ? 4 : 2;
+      return '<span class="pv-frame" style="box-shadow:0 0 0 ' + w + 'px ' + esc(p.color) + '">明</span>';
+    }
+    if (p.type === 'theme') {
+      return '<span class="pv-theme" style="background:' + esc(p.bg) + ';color:' + esc(p.text || '#2C2C2A')
+        + ';border-color:' + esc(p.accent) + '">主题预览</span>';
+    }
+    if (p.type === 'title') {
+      return '<span class="pv-title" style="color:' + esc(p.color || '#5F5E5A') + '">「' + esc(p.text || '') + '」</span>';
+    }
+    return '<span class="pv-name">' + esc(item.name) + '</span>';
+  }
+
+  function renderFilters() {
+    var kinds = [{ id: '', label: '全部' }];
+    Object.keys(StoreCore.KINDS).forEach(function (k) {
+      kinds.push({ id: StoreCore.KINDS[k], label: StoreCore.KIND_LABELS[StoreCore.KINDS[k]] });
+    });
+    elFilters.innerHTML = kinds.map(function (k) {
+      return '<button class="store-chip' + (filter === k.id ? ' active' : '') + '" type="button" data-kind="'
+        + esc(k.id) + '">' + esc(k.label) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(elFilters.querySelectorAll('[data-kind]'), function (btn) {
+      btn.addEventListener('click', function () {
+        filter = btn.getAttribute('data-kind');
+        renderFilters();
+        renderGrid();
+      });
+    });
+  }
+
+  function renderGrid() {
+    var list = StoreCore.listCosmetics(filter || undefined);
+    if (!list.length) {
+      elGrid.innerHTML = '<div class="store-empty">该分类暂无装饰。</div>';
+      return;
+    }
+    elGrid.innerHTML = '';
+    list.forEach(function (item) {
+      var check = StoreCore.canBuy(balance, item, owned);
+      var isOwned = owned.indexOf(item.id) >= 0;
+
+      var card = document.createElement('article');
+      card.className = 'store-card' + (isOwned ? ' owned' : '');
+      card.innerHTML =
+        '<div class="store-pv">' + previewHtml(item) + '</div>' +
+        '<div class="store-kind">' + esc(StoreCore.KIND_LABELS[item.kind] || item.kind) + '</div>' +
+        '<h3 class="store-name">' + esc(item.name) + '</h3>' +
+        '<p class="store-desc">' + esc(item.desc || '') + '</p>' +
+        '<div class="store-foot-row">' +
+          '<span class="store-price">' + item.price + ' <i>积分</i></span>' +
+          '<button class="btn store-buy" type="button">' +
+            (isOwned ? '已拥有' : (check.ok ? '购买' : '积分不足')) +
+          '</button>' +
+        '</div>' +
+        '<div class="store-err">' + esc(isOwned ? '装饰不可重复购买，也不可回售' : (check.ok ? '' : check.error)) + '</div>';
+
+      var btn = card.querySelector('.store-buy');
+      btn.disabled = !check.ok;
+      btn.addEventListener('click', function () { buy(item); });
+      elGrid.appendChild(card);
+    });
+  }
+
+  function renderWallet() {
+    elBalance.textContent = Math.round(balance * 100) / 100;
+    elOwned.textContent = String(owned.length);
+    elSpent.textContent = String(spent);
+  }
+
+  function buy(item) {
+    /* 双保险：UI 禁用之外再校验一次（余额可能已被上一次购买改变） */
+    var check = StoreCore.canBuy(balance, item, owned);
+    if (!check.ok) { toast(check.error, true); return; }
+
+    /* ---- 以下为 mock：真实版由 online.js 依次 insert 三行 ---- */
+    var rows = StoreCore.composePurchase(DEMO_UID, item, { nickname: '演示玩家' });
+
+    balance = StoreCore.round2(balance - item.price);
+    spent += item.price;
+    owned.push(item.id);
+
+    elPreview.textContent = JSON.stringify({
+      'jp_bets（扣分）': rows.spend,
+      'jp_user_items（持有）': rows.holding,
+      'jp_store_orders（订单）': rows.order
+    }, null, 2);
+
+    renderWallet();
+    renderGrid();
+    toast('已购入「' + item.name + '」，扣 ' + item.price + ' 积分（演示）');
+  }
+
+  renderFilters();
+  renderWallet();
+  renderGrid();
+})();
+</script>
+</body>
+</html>

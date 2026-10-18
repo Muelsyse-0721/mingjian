@@ -318,11 +318,12 @@ var LoanCore = (function () {
         return;
       }
       var q = qmap[b.qid] || { title: b.qid };
-      /* 奖励（证据命中）/ 差额补退（仲裁改判）：stake=0，只体现 payout 差额 */
-      if (b.kind === 'bonus' || b.kind === 'adjust') {
+      /* 奖励（证据命中）/ 差额补退（仲裁改判）/ 商城·VIP·奖池·月榜：
+       * stake=0，只体现 payout 差额；文案按 qid 前缀区分来源 */
+      if (b.kind === 'bonus' || b.kind === 'adjust' || b.kind === 'shop') {
         rows.push({ ts: ts(b.settled_at || b.placed_at), type: b.kind,
           amount: Number(b.payout) - Number(b.stake),
-          note: (b.kind === 'bonus' ? '奖励' : '差额补退') + ' · ' + q.title });
+          note: ledgerLabelOf(b, q.title) });
         return;
       }
       rows.push({ ts: ts(b.placed_at), type: 'stake', amount: -Number(b.stake),
@@ -348,6 +349,19 @@ var LoanCore = (function () {
     var running = bonus;
     rows.forEach(function (r) { running += r.amount; r.balanceAfter = round2(running); });
     return rows;
+  }
+
+  /* 非投注流水行的展示文案：平台行（商城/VIP/奖池/月榜）无题目，
+   * 只显示来源，避免把内部 qid 暴露到流水里 */
+  function ledgerLabelOf(b, title) {
+    var qid = String(b.qid || '');
+    if (qid.indexOf('store-') === 0) return '商城消费';
+    if (qid.indexOf('vip-') === 0) return 'VIP 购买';
+    if (qid.indexOf('pool-') === 0) return '奖池奖励';
+    if (qid.indexOf('monthly-') === 0) return '月榜奖励';
+    var label = b.kind === 'shop' ? '商城/VIP 消费'
+      : b.kind === 'bonus' ? '奖励' : '差额补退';
+    return title ? label + ' · ' + title : label;
   }
 
   function outcomeLabelOf(q, oid) {
