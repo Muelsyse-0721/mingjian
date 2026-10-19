@@ -45,8 +45,11 @@ function logWindow(msg) {
   } catch (e) { /* ignore */ }
 }
 
-// 真实的宠物页：../app/pet.html（相对 pet.html 的资源 assets/*.png 会正常解析）
-const PET_PAGE = path.join(__dirname, '..', 'app', 'pet.html');
+// 真实的宠物页：开发态 ../app/pet.html；打包态 Resources/app/web/pet.html
+const PET_PAGE = [
+  path.join(__dirname, '..', 'app', 'pet.html'),
+  path.join(__dirname, 'web', 'pet.html')
+].find((p) => fs.existsSync(p)) || path.join(__dirname, '..', 'app', 'pet.html');
 
 // 默认「桌宠模式」：透明背景，只留宠物本体；--full / PET_FULL_UI=1 时按普通网页展示
 const FULL_UI = process.argv.includes('--full') || process.env.PET_FULL_UI === '1';

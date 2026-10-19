@@ -22,3 +22,5 @@ app/assets/*_expression__*.png
 app/assets/pet/*_20*.png
 app/assets/pet/_src/
 app/assets/pet/local/
+desktop/dist/
+desktop/winbuild/

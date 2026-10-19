@@ -1,0 +1,26 @@
+appId: host.workbuddy.mingjian.pet
+productName: 明鉴桌宠
+electronVersion: 44.9.0
+electronDist: /tmp/ewin/dist
+directories:
+  output: ../dist
+files:
+  - main.js
+  - preload.js
+  - package.json
+  - web/**/*
+win:
+  executableName: mingjian-pet
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: 明鉴桌宠
+  artifactName: mingjian-pet-1.0.0-win-x64-setup.${ext}
