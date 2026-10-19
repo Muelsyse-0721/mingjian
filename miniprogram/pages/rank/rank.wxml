@@ -1,0 +1,15 @@
+<view class="wrap">
+  <view class="muted" style="margin:0 4rpx 14rpx;font-size:22rpx">{{note}}</view>
+  <view wx:if="{{loading && list.length === 0}}" class="empty">加载中…</view>
+  <view wx:if="{{!loading && list.length === 0}}" class="empty">还没有足够的已结算数据</view>
+
+  <view wx:for="{{list}}" wx:key="uid" class="card row">
+    <view>
+      <view class="title">{{index + 1}}. {{item.nick}}</view>
+      <view class="meta muted">已结算 {{item.n}} 笔 · 投入 {{item.stake}} 分</view>
+    </view>
+    <view style="font-size:32rpx;font-weight:600;color:{{item.roi >= 0 ? '#c2410c' : '#15803d'}}">
+      {{item.roi >= 0 ? '+' : ''}}{{item.roi}}%
+    </view>
+  </view>
+</view>

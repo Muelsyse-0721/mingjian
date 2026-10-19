@@ -1,0 +1,15 @@
+{
+  "appid": "touristappid",
+  "projectname": "mingjian-miniprogram",
+  "compileType": "miniprogram",
+  "libVersion": "3.6.0",
+  "miniprogramRoot": "./",
+  "cloudfunctionRoot": "./cloudfunctions/",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  }
+}

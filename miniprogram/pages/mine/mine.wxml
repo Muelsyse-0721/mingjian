@@ -1,0 +1,36 @@
+<view class="wrap">
+  <view wx:if="{{!session || !session.token}}" class="card">
+    <view class="title" style="margin-bottom:16rpx">手机号登录</view>
+    <input type="number" maxlength="11" value="{{phone}}" bindinput="inputPhone" placeholder="11 位手机号"
+           style="border:1rpx solid #e4e9f0;border-radius:12rpx;padding:18rpx;margin-bottom:14rpx" />
+    <view class="row" style="gap:12rpx">
+      <input type="number" maxlength="6" value="{{code}}" bindinput="inputCode" placeholder="短信验证码"
+             style="flex:1;border:1rpx solid #e4e9f0;border-radius:12rpx;padding:18rpx" />
+      <view class="btn ghost" style="flex:0 0 200rpx;padding:18rpx 0" bindtap="sendCode">
+        {{countdown > 0 ? countdown + 's' : '获取验证码'}}
+      </view>
+    </view>
+    <view class="btn" style="margin-top:18rpx" bindtap="login">{{loading ? '登录中…' : '登录'}}</view>
+    <view class="meta muted">与网站同一账号体系，登录后下注会实时写进同一个云端。</view>
+  </view>
+
+  <view wx:else class="card">
+    <view class="title">已登录</view>
+    <view class="meta muted">账号：{{session.phone || session.uid}}</view>
+    <view class="btn ghost" style="margin-top:16rpx" bindtap="logout">退出登录</view>
+  </view>
+
+  <view wx:if="{{session && session.token}}">
+    <view class="muted" style="margin:8rpx 4rpx 14rpx;font-size:22rpx">我的投注（最近 50 条，每 5 秒同步）</view>
+    <view wx:if="{{myBets.length === 0}}" class="empty">还没有投注记录</view>
+    <view wx:for="{{myBets}}" wx:key="id" class="card" data-qid="{{item.qid}}" bindtap="openDetail">
+      <view class="title">{{item.qid}}</view>
+      <view class="meta">
+        <text class="tag">{{item.outcome_id}}</text>
+        <text>{{item.stake}} 分</text>
+        <text> · {{item.status}}</text>
+        <text wx:if="{{item.payout}}"> · 派彩 {{item.payout}}</text>
+      </view>
+    </view>
+  </view>
+</view>

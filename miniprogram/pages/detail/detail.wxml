@@ -1,0 +1,33 @@
+<view class="wrap" wx:if="{{q}}">
+  <view class="card">
+    <view class="title">{{q.title}}</view>
+    <view class="meta">
+      <text class="tag">{{q.category || '综合'}}</text>
+      <text>奖池 {{total}} 分</text>
+      <text wx:if="{{q.deadline}}"> · 截止 {{q.deadline}}</text>
+    </view>
+    <view class="meta muted" wx:if="{{q.descr}}">{{q.descr}}</view>
+  </view>
+
+  <view class="card">
+    <view class="muted" style="margin-bottom:12rpx">选项（点击选择）</view>
+    <view wx:for="{{outcomes}}" wx:key="id"
+          class="row" style="padding:18rpx 0;border-bottom:1rpx solid #f0f3f8"
+          data-id="{{item.id}}" bindtap="pick">
+      <view>
+        <text style="font-size:30rpx">{{item.label}}</text>
+        <text class="muted" style="font-size:24rpx"> · 已押 {{item.pool}}</text>
+      </view>
+      <view class="{{pick === item.id ? 'tag' : 'muted'}}">{{item.odds}} 倍</view>
+    </view>
+
+    <view wx:if="{{isOpen}}" style="margin-top:22rpx">
+      <input type="number" value="{{stake}}" bindinput="input"
+             placeholder="输入下注积分" style="border:1rpx solid #e4e9f0;border-radius:12rpx;padding:18rpx" />
+      <view class="meta muted" wx:if="{{expect > 0}}">押中可赢约 {{expect}} 分（含本金）</view>
+      <view class="btn" style="margin-top:16rpx" bindtap="bet">确认下注</view>
+    </view>
+    <view wx:else class="empty">该题已截止或已揭晓</view>
+  </view>
+</view>
+<view class="empty" wx:else>加载中…</view>

@@ -1,0 +1,24 @@
+<view class="wrap">
+  <scroll-view class="tabs" scroll-x>
+    <view wx:for="{{tabs}}" wx:key="key"
+          class="tab {{active === item.key ? 'on' : ''}}"
+          data-key="{{item.key}}" bindtap="switchTab">{{item.name}}</view>
+  </scroll-view>
+
+  <view wx:if="{{updatedAt}}" class="muted" style="margin:0 4rpx 12rpx;font-size:22rpx">
+    每 5 秒自动同步 · 最近更新 {{updatedAt}}
+  </view>
+
+  <view wx:if="{{loading && list.length === 0}}" class="empty">加载中…</view>
+  <view wx:if="{{!loading && list.length === 0}}" class="empty">这个分区暂时是空的</view>
+
+  <view wx:for="{{list}}" wx:key="qid" class="card" data-qid="{{item.qid}}" bindtap="openDetail">
+    <view class="title">{{item.title}}</view>
+    <view class="meta">
+      <text class="tag">{{item.category}}</text>
+      <text>奖池 {{item.total}} 分</text>
+      <text wx:if="{{item.deadline}}"> · 截止 {{item.deadline}}</text>
+    </view>
+    <view class="meta muted" wx:if="{{item.result}}">结果：{{item.result}}</view>
+  </view>
+</view>

@@ -1,0 +1,25 @@
+{
+  "pages": [
+    "pages/hall/hall",
+    "pages/detail/detail",
+    "pages/rank/rank",
+    "pages/mine/mine"
+  ],
+  "window": {
+    "navigationBarTitleText": "明鉴",
+    "navigationBarBackgroundColor": "#0f172a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f7fb"
+  },
+  "tabBar": {
+    "color": "#8a919c",
+    "selectedColor": "#b45309",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/hall/hall", "text": "大厅" },
+      { "pagePath": "pages/rank/rank", "text": "天梯" },
+      { "pagePath": "pages/mine/mine", "text": "我的" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

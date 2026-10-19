@@ -1,0 +1,36 @@
+page {
+  background: #f5f7fb;
+  color: #1f2329;
+  font-size: 28rpx;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.wrap { padding: 20rpx 24rpx 40rpx; }
+.card {
+  background: #fff;
+  border-radius: 18rpx;
+  padding: 24rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 2rpx 10rpx rgba(20, 40, 80, .05);
+}
+.title { font-size: 30rpx; font-weight: 600; line-height: 1.5; }
+.meta { color: #8a919c; font-size: 24rpx; margin-top: 10rpx; }
+.tag {
+  display: inline-block; font-size: 22rpx; color: #92400e;
+  background: #fff7ea; border: 1rpx solid #f3d9a8;
+  border-radius: 999rpx; padding: 2rpx 14rpx; margin-right: 10rpx;
+}
+.row { display: flex; align-items: center; justify-content: space-between; }
+.muted { color: #8a919c; }
+.btn {
+  background: #b45309; color: #fff; border-radius: 12rpx;
+  padding: 18rpx 0; text-align: center; font-size: 28rpx;
+}
+.btn.ghost { background: #fff; color: #b45309; border: 1rpx solid #f3d9a8; }
+.tabs { display: flex; gap: 12rpx; overflow-x: auto; margin-bottom: 18rpx; }
+.tab {
+  flex: 0 0 auto; font-size: 26rpx; padding: 10rpx 22rpx;
+  background: #fff; border-radius: 999rpx; color: #5b6472;
+  border: 1rpx solid #e4e9f0;
+}
+.tab.on { background: #b45309; color: #fff; border-color: #b45309; }
+.empty { text-align: center; color: #9aa2ad; padding: 80rpx 0; font-size: 26rpx; }
