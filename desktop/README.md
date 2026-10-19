@@ -205,6 +205,6 @@ const PET_PAGE = path.join(__dirname, '..', 'app', 'pet.html');
 2. **看进程**：`ps aux | grep "键政游戏/desktop"`。有进程但没窗口 = 窗口没显示；
    新版已在 `ready-to-show / did-finish-load / 1.2s / 3s` 四重兜底里强制 `showInactive()`，
    并写日志到 `/tmp/pet-window.log`（`shown via ... visible=true` 即成功）。
-3. **窗口被隐藏**：鼠标双击桌宠会隐藏；再双击 App（`activate`）或按 `Ctrl+Shift+F` 唤回。
-4. **退出**：`Ctrl+Shift+Q`，或在桌宠上右键 → 退出。
+3. **窗口被隐藏**：鼠标双击桌宠会隐藏；再双击 App（`activate`）或按 `⌘⇧F` 唤回。
+4. **退出**：`⌘⌥Q`，或在桌宠上右键 → 退出。
 5. 若日志显示 `did-fail-load`，说明页面没加载成功，检查 `app/pet.html` 是否被移动。
