@@ -31,12 +31,12 @@ var VipCore = (function () {
   var TIERS = {
     vip1: {
       id: 'vip1',
-      name: '明鉴会员',
-      price_points: 2000,
+      name: '明鉴月卡',
+      price_points: 1000,
       days: 30,
       perks: {
-        fee_discount: 0.20,
-        loan_limit_bonus: 300,
+        fee_discount: 0.15,
+        loan_limit_bonus: 2000,
         max_open_questions: 5,
         arbitration_priority: 1,
         analytics_plus: false
@@ -44,20 +44,33 @@ var VipCore = (function () {
     },
     vip2: {
       id: 'vip2',
-      name: '明鉴尊享',
-      price_points: 5000,
+      name: '明鉴季卡',
+      price_points: 2600,
       days: 90,
       perks: {
-        fee_discount: 0.40,
-        loan_limit_bonus: 800,
-        max_open_questions: 10,
+        fee_discount: 0.30,
+        loan_limit_bonus: 6000,
+        max_open_questions: 8,
         arbitration_priority: 2,
+        analytics_plus: true
+      }
+    },
+    vip3: {
+      id: 'vip3',
+      name: '明鉴年卡',
+      price_points: 8800,
+      days: 365,
+      perks: {
+        fee_discount: 0.45,
+        loan_limit_bonus: 20000,
+        max_open_questions: 15,
+        arbitration_priority: 3,
         analytics_plus: true
       }
     }
   };
 
-  var TIER_IDS = ['vip1', 'vip2'];
+  var TIER_IDS = ['vip1', 'vip2', 'vip3'];
 
   /* 非 VIP 的等价特权（全为零值），保证调用方无需判空 */
   var NEUTRAL_PERKS = {

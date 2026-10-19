@@ -138,10 +138,10 @@ check('重新初始化后流水仍在', $('ledger').innerHTML.indexOf('ledger-ta
 console.log('[8] 信用借贷');
 click(w.document.querySelector('[data-view="betting"]'));
 check('借贷卡片渲染', $('loan-card').innerHTML.indexOf('信用借贷') !== -1);
-check('初始额度 800', $('loan-card').innerHTML.indexOf('>800<') !== -1);
+check('初始额度 3000', $('loan-card').innerHTML.indexOf('>3000<') !== -1);
 
 setInput($('loan-amount'), '100');
-check('到期需还实时计算 105', $('loan-due').textContent.indexOf('105') !== -1);
+check('到期需还实时计算 108', $('loan-due').textContent.indexOf('108') !== -1);
 click($('btn-borrow'));
 
 const savedLoan = JSON.parse(w.localStorage.getItem('jp-ladder-v1'));
@@ -154,11 +154,11 @@ setInput(w.document.querySelector('[data-repay="' + loan8.lid + '"]'), '50');
 click(w.document.querySelector('[data-do-repay="' + loan8.lid + '"]'));
 const savedRepay = JSON.parse(w.localStorage.getItem('jp-ladder-v1'));
 const loan8b = savedRepay.loans.find(l => l.lid === loan8.lid);
-check('部分还款先息后本', loan8b.repaid_interest === 5 && loan8b.repaid_principal === 45);
+check('部分还款先息后本', loan8b.repaid_interest === 8 && loan8b.repaid_principal === 42);
 check('未还清不结清', loan8b.status === 'open');
 check('还款记录入账', savedRepay.loanPayments.some(p => p.lid === loan8.lid && p.amount === 50));
 check('流水含还款 -50', savedRepay.ledger.some(e => e.type === 'repay' && e.amount === -50));
-check('卡片显示剩余应还', $('loan-card').innerHTML.indexOf('应还 55 分') !== -1);
+check('卡片显示剩余应还', $('loan-card').innerHTML.indexOf('应还 58 分') !== -1);
 
 /* ---------- [9] 破产保护（净资产跌破 → 自动核销，记录留存） ---------- */
 console.log('[9] 破产保护');
@@ -166,14 +166,14 @@ const saved9 = JSON.parse(w.localStorage.getItem('jp-ladder-v1'));
 const crafted = {
   posts: [], results: [],
   questions: saved9.questions,
-  bets: [{ id: 'b-big', questionId: saved9.questions[0].id, outcomeId: 'yes', stake: 1000, oddsAtBet: 1.8, status: 'lost', payout: 0 }],
-  loans: [{ lid: 'l-big', uid: 'me', principal: 1000, rate: 0.05, term_days: 7,
+  bets: [{ id: 'b-big', questionId: saved9.questions[0].id, outcomeId: 'yes', stake: 4000, oddsAtBet: 1.8, status: 'lost', payout: 0 }],
+  loans: [{ lid: 'l-big', uid: 'me', principal: 4000, rate: 0.05, term_days: 7,
     due_date: '2026-10-01', status: 'open', repaid_principal: 0, repaid_interest: 0, late_fee: 0,
     created_at: '2026-10-01T00:00:00Z' }],
   loanPayments: [],
   ledger: [
-    { id: 'l1', ts: 1, type: 'loan', amount: 1000, note: '借款', balanceAfter: 1000 },
-    { id: 'l2', ts: 2, type: 'stake', amount: -1000, note: '下注', balanceAfter: 0 }
+    { id: 'l1', ts: 1, type: 'loan', amount: 4000, note: '借款', balanceAfter: 4000 },
+    { id: 'l2', ts: 2, type: 'stake', amount: -4000, note: '下注', balanceAfter: 0 }
   ]
 };
 w.localStorage.setItem('jp-ladder-v1', JSON.stringify(crafted));
@@ -184,7 +184,7 @@ check('触发破产保护提示', w.__alerts.some(a => a.indexOf('破产保护')
 check('借款被核销（记录留存）', afterBk.loans.length === 1 && afterBk.loans[0].status === 'written_off');
 
 click(w.document.querySelector('[data-view="betting"]'));
-check('核销后额度恢复 800', $('loan-card').innerHTML.indexOf('>800<') !== -1);
+check('核销后额度恢复 3000', $('loan-card').innerHTML.indexOf('>3000<') !== -1);
 check('核销后负债清零', $('loan-card').innerHTML.indexOf('已核销') !== -1);
 check('核销记录展示', $('loan-card').innerHTML.indexOf('破产保护已核销') !== -1);
 

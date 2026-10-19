@@ -45,6 +45,56 @@
     cooker: ['电饭煲开盖——香！', '从电饭煲盛一大碗，绝了～', '冒热气了，趁热吃！']
   };
 
+  /* ---------------- Claude 专属人设（书卷气 / 红茶 / 花 / 温和） ---------------- */
+  var CLAUDE = {
+    lines: {
+      normal: [
+        '我在读一本旧书，你要一起吗？',
+        '红茶刚泡好，稍微有点烫。',
+        '窗边的光很好，适合写点东西。',
+        '如果你愿意，我们可以慢慢聊。',
+        '这朵花是早上摘的，别在书里正好。',
+        '我不太擅长下判断，但可以先陪你理一理。'
+      ],
+      happy: [
+        '读到一句很好的话，想读给你听。',
+        '茶点配书，今天很圆满。',
+        '谢谢你陪我说了这么久。',
+        '花开了，我把最精神的一朵留给你。'
+      ],
+      confused: [
+        '让我再想一会儿……这句我还没读懂。',
+        '嗯，这个前提好像有点问题？',
+        '（合上书）抱歉，刚才走神了。',
+        '你说的和书里写的，好像不太一样。'
+      ],
+      sad: [
+        '这一页读完了，故事却不太好。',
+        '茶凉了，我忘了喝。',
+        '有些问题，我确实回答不了。',
+        '（把书轻轻合上）让我安静一会儿。'
+      ],
+      sleepy: [
+        '再看一页就睡……就一页。',
+        '灯有点昏，字开始糊了。',
+        '红茶喝完了，困意就上来了。'
+      ]
+    },
+    acts: {
+      book: {
+        label: '📖 翻开书', emoji: '📖',
+        lines: ['这一页讲的是「论证的结构」，要不要听？', '（翻页）嗯…这里有个批注很有意思。', '我把书签夹在这一章了。']
+      },
+      tea: {
+        label: '🍵 泡杯红茶', emoji: '🍵',
+        lines: ['红茶要等三分钟，别急。', '加了半勺蜂蜜，你尝尝。', '茶点只有一块饼干，分你一半。']
+      }
+    },
+    greet: '你来了。坐吧，我给你留了位置。'
+  };
+
+  var activeChar = 'generic';
+
   /* ---------------- 皮肤 ---------------- */
   var SKIN_IDS = [
     'skin-claude-normal', 'skin-claude-mini',
@@ -66,6 +116,8 @@
 
   function applySkin(id, persist) {
     var sid = normalizeSkin(id);
+    activeChar = sid.indexOf('claude') === 0 ? 'claude' : 'generic';
+    updateActLabels();
     if (!sid) {
       pet.classList.remove('has-skin');
       skinImg.removeAttribute('src');
@@ -85,7 +137,7 @@
       pet.setAttribute('data-face', 'calm');
       if (persist) writeStore(SKIN_KEY, '');
     };
-    skinImg.src = 'assets/pet/' + sid + '.png?v=2';
+    skinImg.src = 'assets/pet/' + sid + '.png?v=3';
     if (skinPick) skinPick.value = sid;
     if (persist) writeStore(SKIN_KEY, sid);
   }
@@ -188,7 +240,8 @@
     var mood = MOODS[Math.floor(Math.random() * MOODS.length)];
     setMood(mood);
     react(mood);
-    var arr = LINES[mood] || LINES.normal;
+    var bank = (activeChar === 'claude') ? CLAUDE.lines : LINES;
+    var arr = bank[mood] || bank.normal;
     say(arr[Math.floor(Math.random() * arr.length)]);
 
     // 点击时插入第二个表情帧：happy ↔ sad 快速切换，形成完整的情绪反应
@@ -212,6 +265,32 @@
     react('happy');
     var arr = RICE[kind] || RICE.bowl;
     say(arr[Math.floor(Math.random() * arr.length)]);
+  }
+
+  /* Claude 专属动作：悬浮道具（书 / 红茶），复用 propPop 动画 */
+  function showEmoji(emoji, lines) {
+    var el = document.getElementById('prop-emoji');
+    if (el) {
+      el.textContent = emoji;
+      el.classList.remove('show');
+      void el.offsetWidth;
+      el.classList.add('show');
+    }
+    setMood('happy');
+    react('happy');
+    if (lines && lines.length) say(lines[Math.floor(Math.random() * lines.length)]);
+  }
+
+  function updateActLabels() {
+    var b = document.getElementById('act-bowl');
+    var c = document.getElementById('act-cooker');
+    if (activeChar === 'claude') {
+      if (b) b.textContent = CLAUDE.acts.book.label;
+      if (c) c.textContent = CLAUDE.acts.tea.label;
+    } else {
+      if (b) b.textContent = '🍚 端出钢盆';
+      if (c) c.textContent = '🍚 电饭煲盛饭';
+    }
   }
 
   /* ---------------- 真动画：眨眼 + 空闲表情帧 ---------------- */
@@ -471,11 +550,13 @@
   var actCooker = document.getElementById('act-cooker');
   if (actBowl) actBowl.addEventListener('click', function () {
     if (typeof PetVoice !== 'undefined') PetVoice.prime();
-    showProp('bowl');
+    if (activeChar === 'claude') showEmoji(CLAUDE.acts.book.emoji, CLAUDE.acts.book.lines);
+    else showProp('bowl');
   });
   if (actCooker) actCooker.addEventListener('click', function () {
     if (typeof PetVoice !== 'undefined') PetVoice.prime();
-    showProp('cooker');
+    if (activeChar === 'claude') showEmoji(CLAUDE.acts.tea.emoji, CLAUDE.acts.tea.lines);
+    else showProp('cooker');
   });
 
   /* ---------------- 初始化 ---------------- */
@@ -490,7 +571,9 @@
       pet.setAttribute('hidden', '');
       if (restore) restore.classList.add('show');
     }
-    setTimeout(function () { say('咦，有人来了～点我一下试试！'); }, 600);
+    setTimeout(function () {
+      say(activeChar === 'claude' ? CLAUDE.greet : '咦，有人来了～点我一下试试！');
+    }, 600);
   }
 
   // 帧动画启动

@@ -312,15 +312,15 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
   const st = { site: LC.DEFAULTS };
   const loan1 = { lid: 'l1', uid: 'u1', principal: 300, rate: 0.05, term_days: 7, due_date: LC.addDaysStr(7, NOW),
     status: 'open', repaid_principal: 0, repaid_interest: 0, late_fee: 0 };
-  check('LC 额度初始 800', LC.creditLimitOf('u1', [loan1], st) === 800);
+  check('LC 额度初始 3000', LC.creditLimitOf('u1', [loan1], st) === 3000);
   check('LC 应还 315', LC.outstandingOf(loan1, NOW).total === 315);
   check('LC 还款分配先息后本', JSON.stringify(LC.repayPlan(loan1, 100, NOW)) ===
     JSON.stringify({ late: 0, interest: 15, principal: 85, total: 100, remaining: 215 }));
   const od = { lid: 'l2', uid: 'u2', principal: 300, rate: 0.05, term_days: 7, due_date: '2026-10-13',
     status: 'open', repaid_principal: 0, repaid_interest: 0, late_fee: 0 };
-  check('LC 逾期罚息 21', LC.outstandingOf(od, NOW).lateLeft === 21);
-  check('LC 逾期额度 -200', LC.creditLimitOf('u2', [od], st) === 600);
-  check('LC 强平判定', LC.isLiquidated('u3', [], [{ uid: 'u3', principal: 1400, rate: 0.05, term_days: 7,
+  check('LC 逾期罚息 42', LC.outstandingOf(od, NOW).lateLeft === 42);
+  check('LC 逾期额度 -500', LC.creditLimitOf('u2', [od], st) === 2500);
+  check('LC 强平判定', LC.isLiquidated('u3', [], [{ uid: 'u3', principal: 4500, rate: 0.05, term_days: 7,
     due_date: LC.addDaysStr(7, NOW), status: 'open', repaid_principal: 0, repaid_interest: 0, late_fee: 0 }], [], st, NOW) === true);
   check('LC 利息池汇总', LC.interestPoolOf([{ interest_part: 15, late_part: 0 }, { interest_part: 5, late_part: 2 }]) === 22);
   check('LC 利息池可分配扣减', LC.interestBalanceOf([{ interest_part: 30, late_part: 0 }], [{ amount: 12 }]) === 18);
@@ -330,11 +330,11 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
     due_date: '2026-10-13', status: 'written_off', repaid_principal: 0, repaid_interest: 0, late_fee: 0 };
   check('LC 核销后债务清零', LC.outstandingOf(wo, NOW).total === 0);
   check('LC 核销后本金仍计现金', LC.cashOf('u9', [], [wo], [], st) === 1300);
-  check('LC 核销不计逾期、额度恢复', LC.creditLimitOf('u9', [wo], st) === 800);
-  check('LC 还清一笔额度 +200', LC.creditLimitOf('u9', [{ lid: 'l7', uid: 'u9', principal: 50, rate: 0.05,
-    term_days: 7, due_date: LC.addDaysStr(7, NOW), status: 'repaid' }], st) === 1000);
+  check('LC 核销不计逾期、额度恢复', LC.creditLimitOf('u9', [wo], st) === 3000);
+  check('LC 还清一笔额度 +500', LC.creditLimitOf('u9', [{ lid: 'l7', uid: 'u9', principal: 50, rate: 0.05,
+    term_days: 7, due_date: LC.addDaysStr(7, NOW), status: 'repaid' }], st) === 3500);
   check('LC 核销后净资产 = 现金', LC.netWorthOf('u9', [], [wo], [], st, NOW) === 1300);
-  check('LC 破产判定', LC.isBankrupt('u9', [{ uid: 'u9', stake: 2000, status: 'lost', payout: 0 }],
+  check('LC 破产判定', LC.isBankrupt('u9', [{ uid: 'u9', stake: 4500, status: 'lost', payout: 0 }],
     [{ lid: 'l8', uid: 'u9', principal: 1000, rate: 0.05, term_days: 7,
       due_date: LC.addDaysStr(7, NOW), status: 'open', repaid_principal: 0, repaid_interest: 0, late_fee: 0 }],
     [], st, NOW) === true);

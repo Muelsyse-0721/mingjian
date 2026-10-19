@@ -199,46 +199,44 @@ var StoreCore = (function () {
   var VIP_BENEFITS = deepFreeze([
     {
       tier: 'vip1',
-      name: '明鉴会员',
+      name: '明鉴月卡',
       items: [
-        {
-          key: 'fee_discount', label: '抽水返利', value: '20%',
-          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 20%」返还积分（VipCore.feeRebateOf）。'
-        },
-        {
-          key: 'fee_effective', label: '实际抽水率', value: '4%',
-          desc: '默认抽水 5% 时，本人实际只承担 4%（VipCore.effectiveFee）；返利只惠及本人。'
-        },
-        {
-          key: 'loan_limit_bonus', label: '借款额度加成', value: '+300 分',
-          desc: '信用额度上限在基础值上再加 300 分（默认 8000 → 8300，VipCore.loanLimit）。'
-        },
-        {
-          key: 'max_open_questions', label: '同时建题上限', value: '5 题',
-          desc: '同时进行中的建题上限由 3 题提升到 5 题（VipCore.maxQuestions）。'
-        }
+        { key: 'fee_discount', label: '抽水返利', value: '15%',
+          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 15%」返还积分（VipCore.feeRebateOf）。' },
+        { key: 'fee_effective', label: '实际抽水率', value: '4.25%',
+          desc: '默认抽水 5% 时，本人实际只承担 4.25%（VipCore.effectiveFee）；返利只惠及本人。' },
+        { key: 'loan_limit_bonus', label: '借款额度加成', value: '+2000 分',
+          desc: '信用额度上限在基础值上再加 2000 分（默认 30000 → 32000，VipCore.loanLimit）。' },
+        { key: 'max_open_questions', label: '同时建题上限', value: '5 题',
+          desc: '同时进行中的建题上限由 3 题提升到 5 题（VipCore.maxQuestions）。' }
       ]
     },
     {
       tier: 'vip2',
-      name: '明鉴尊享',
+      name: '明鉴季卡',
       items: [
-        {
-          key: 'fee_discount', label: '抽水返利', value: '40%',
-          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 40%」返还积分（VipCore.feeRebateOf）。'
-        },
-        {
-          key: 'fee_effective', label: '实际抽水率', value: '3%',
-          desc: '默认抽水 5% 时，本人实际只承担 3%（VipCore.effectiveFee）；返利只惠及本人。'
-        },
-        {
-          key: 'loan_limit_bonus', label: '借款额度加成', value: '+800 分',
-          desc: '信用额度上限在基础值上再加 800 分（默认 8000 → 8800，VipCore.loanLimit）。'
-        },
-        {
-          key: 'max_open_questions', label: '同时建题上限', value: '10 题',
-          desc: '同时进行中的建题上限由 3 题提升到 10 题（VipCore.maxQuestions）。'
-        }
+        { key: 'fee_discount', label: '抽水返利', value: '30%',
+          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 30%」返还积分（VipCore.feeRebateOf）。' },
+        { key: 'fee_effective', label: '实际抽水率', value: '3.5%',
+          desc: '默认抽水 5% 时，本人实际只承担 3.5%（VipCore.effectiveFee）；返利只惠及本人。' },
+        { key: 'loan_limit_bonus', label: '借款额度加成', value: '+6000 分',
+          desc: '信用额度上限在基础值上再加 6000 分（默认 30000 → 36000，VipCore.loanLimit）。' },
+        { key: 'max_open_questions', label: '同时建题上限', value: '8 题',
+          desc: '同时进行中的建题上限由 3 题提升到 8 题（VipCore.maxQuestions）。' }
+      ]
+    },
+    {
+      tier: 'vip3',
+      name: '明鉴年卡',
+      items: [
+        { key: 'fee_discount', label: '抽水返利', value: '45%',
+          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 45%」返还积分（VipCore.feeRebateOf）。' },
+        { key: 'fee_effective', label: '实际抽水率', value: '2.75%',
+          desc: '默认抽水 5% 时，本人实际只承担 2.75%（VipCore.effectiveFee）；返利只惠及本人。' },
+        { key: 'loan_limit_bonus', label: '借款额度加成', value: '+20000 分',
+          desc: '信用额度上限在基础值上再加 20000 分（默认 30000 → 50000，VipCore.loanLimit）。' },
+        { key: 'max_open_questions', label: '同时建题上限', value: '15 题',
+          desc: '同时进行中的建题上限由 3 题提升到 15 题（VipCore.maxQuestions）。' }
       ]
     }
   ]);
@@ -246,15 +244,12 @@ var StoreCore = (function () {
   /* 商城卡片：{ tier, name, price, days, highlights, notes } */
   var VIP_TIER_CARDS = deepFreeze([
     {
-      tier: 'vip1',
-      name: '明鉴会员',
-      price: 2000,
-      days: 30,
+      tier: 'vip1', name: '明鉴月卡', price: 1000, days: 30,
       highlights: [
-        '中奖抽水返利 20%（默认 5% → 实付 4%）',
-        '借款额度上限 +300 分',
+        '中奖抽水返利 15%（默认 5% → 实付 4.25%）',
+        '借款额度上限 +2000 分（30000 → 32000）',
         '同时建题上限 3 → 5 题',
-        '到期自动失效，不带任何扣费'
+        '30 天有效期，到期自动失效、不自动扣费'
       ],
       notes: [
         '只影响本人：不改变全池赔率，不改变其他玩家派彩，也不改变公共奖池分配比例。',
@@ -263,20 +258,31 @@ var StoreCore = (function () {
       ]
     },
     {
-      tier: 'vip2',
-      name: '明鉴尊享',
-      price: 5000,
-      days: 90,
+      tier: 'vip2', name: '明鉴季卡', price: 2600, days: 90,
       highlights: [
-        '中奖抽水返利 40%（默认 5% → 实付 3%）',
-        '借款额度上限 +800 分',
-        '同时建题上限 3 → 10 题',
-        '90 天有效期，单日成本低于会员档'
+        '中奖抽水返利 30%（默认 5% → 实付 3.5%）',
+        '借款额度上限 +6000 分（30000 → 36000）',
+        '同时建题上限 3 → 8 题',
+        '90 天有效期，折合单日 28.9 分，比月卡省 400 分'
       ],
       notes: [
         '只影响本人：不改变全池赔率，不改变其他玩家派彩，也不改变公共奖池分配比例。',
         '积分购买，不可充值 / 提现 / 转让 / 兑换真实货币。',
         '「仲裁优先」「高级看板」两个参数已在 VipCore 预留（arbitration_priority / analytics_plus），当前版本尚未接入界面，不构成已生效权益。'
+      ]
+    },
+    {
+      tier: 'vip3', name: '明鉴年卡', price: 8800, days: 365,
+      highlights: [
+        '中奖抽水返利 45%（默认 5% → 实付 2.75%）',
+        '借款额度上限 +20000 分（30000 → 50000）',
+        '同时建题上限 3 → 15 题',
+        '365 天有效期，折合单日 24.1 分，比按月买省 3200 分'
+      ],
+      notes: [
+        '只影响本人：不改变全池赔率，不改变其他玩家派彩，也不改变公共奖池分配比例。',
+        '积分购买，不可充值 / 提现 / 转让 / 兑换真实货币。',
+        '年卡适合长期开题/做市的站长型玩家，普通围观用户买月卡即可。'
       ]
     }
   ]);

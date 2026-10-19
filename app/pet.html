@@ -59,6 +59,7 @@
 
   .prop { position:absolute; left:50%; bottom:-6px; transform:translateX(-50%) scale(.6); opacity:0; z-index:3; pointer-events:none; width:132px; }
   .prop.show { animation: propPop 2.6s ease forwards; }
+  .prop-emoji { font-size:54px; line-height:1; bottom:2px; filter:drop-shadow(0 4px 8px rgba(30,50,80,.22)); }
   @keyframes propPop { 0%{opacity:0; transform:translateX(-50%) scale(.6)} 14%{opacity:1; transform:translateX(-50%) scale(1.06)} 28%{transform:translateX(-50%) scale(1)} 82%{opacity:1} 100%{opacity:0; transform:translateX(-50%) scale(1)} }
 
   #pet-bubble { position:fixed; z-index:9999; max-width:240px; background:#fff; color:#22303f; border:1px solid #dbe4ef; border-radius:12px; padding:9px 12px; font-size:13px; line-height:1.6; box-shadow:0 6px 18px rgba(40,80,140,.15); opacity:0; transform:translateY(6px); transition:opacity .18s, transform .18s; pointer-events:none; }
@@ -144,6 +145,7 @@
           <path d="M82 42 q8 -10 0 -18" fill="none" stroke="#cfd6df" stroke-width="3" stroke-linecap="round" opacity=".6"/>
         </svg>
       </div>
+      <div class="prop prop-emoji" id="prop-emoji"></div>
     </div>
     <div id="pet-close" title="隐藏桌宠（双击也可以）">✕</div>
   </div>
