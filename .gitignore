@@ -27,3 +27,4 @@ desktop/winbuild/
 tools/data/*.json
 tools/data/*.lock
 tools/CosyVoice/
+tools/cv-venv/
