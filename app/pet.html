@@ -167,6 +167,7 @@
         <option value="">默认 · 大肥鱼</option>
         <option value="skin-claude-normal">Claude</option>
         <option value="skin-claude-mini">Claude 小号</option>
+        <option value="skin-claude-medium">Claude 中号</option>
         <option value="skin-gpt-normal">GPT</option>
         <option value="skin-gpt-mini">GPT 小号</option>
         <option value="skin-gemini">Gemini</option>
@@ -175,6 +176,7 @@
         <option value="skin-glm">GLM</option>
         <option value="skin-qwen">千问</option>
       </select>
+      <button class="act" id="btn-follow">🎯 跟随鼠标：开</button>
       <button class="mute" id="btn-mute">🔇 开启声音（默认静音）</button>
     </div>
     <div class="row2">
@@ -182,9 +184,21 @@
       <button class="send" id="qa-send">发送</button>
     </div>
     <div class="tip">内置脚本问答 + 浏览器中文萌音（不联网、不出额度）· 默认不发声。</div>
+    <div class="row2" style="margin-top:6px">
+      <select id="llm-provider" style="flex:0 0 118px;border:1px solid #d7dee8;border-radius:10px;padding:8px;font-size:12px">
+        <option value="none">不连接模型</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="workbuddy">WorkBuddy</option>
+      </select>
+      <input id="llm-key" placeholder="Key（WorkBuddy 填 endpoint|publishableKey）">
+      <button class="send" id="llm-save">保存</button>
+    </div>
+    <div class="tip" id="llm-tip">可选：填入 Key 后，她就用真模型回答；只存本机，不联网上传。</div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
 <script src="js/pet-voice.js"></script>
+<script src="js/pet-llm.js"></script>
 <script src="pet.js"></script>
 </body>
 </html>

@@ -167,3 +167,32 @@ const PET_PAGE = path.join(__dirname, '..', 'app', 'pet.html');
 - 默认不记住窗口位置（每次启动回到右下角），需要的话可在主进程里读写 `app.getPath('userData')` 下的 JSON。
 - 页面内的「端钢盆 / 电饭煲盛饭」按钮在桌宠模式下被隐藏，点击宠物本体仍会随机换表情说话；
   想用完整面板就用 `npm run start:full`。
+
+
+## 启动方式（macOS，2026-10-19）
+
+三种任选：
+
+1. **双击 App**：`~/Applications/明鉴桌宠.app`（桌面有同名快捷方式）
+2. **双击脚本**：桌面 `启动明鉴桌宠.command`
+3. **命令行**：`cd desktop && unset ELECTRON_RUN_AS_NODE && npm start`
+
+> 注意：如果环境里设了 `ELECTRON_RUN_AS_NODE=1`，Electron 会退化成 Node 直接跑 main.js，
+> 报 `Cannot read properties of undefined (reading 'whenReady')`。启动脚本里已 `unset`。
+
+窗口：260×260 透明、无边框、置顶、可拖动；`npm run start:full` 是 960×760 的完整面板。
+
+## 交互
+
+- 拖动移动；双击隐藏，桌面「叫出大肥鱼」恢复
+- **鼠标跟随**：默认开，面板里「🎯 跟随鼠标：开/关」可关（存 localStorage `jp-pet-follow`）
+- 默认静音，点「开启声音」才说话
+- 换装：面板下拉切换皮肤（Claude 正常/中号/小号、GPT 正常/小号、Gemini、Grok、Kimi、智谱、千问）
+
+## 连接模型（可选）
+
+面板底部选 DeepSeek 或 WorkBuddy，填 Key 后保存（只存本机 localStorage `jp-pet-llm`）。
+
+- DeepSeek：填 `sk-...`，直连 `api.deepseek.com`（`deepseek-chat`）
+- WorkBuddy：填 `endpoint|publishableKey`
+- 不填则用内置脚本问答

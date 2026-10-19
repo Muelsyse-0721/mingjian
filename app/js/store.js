@@ -124,6 +124,12 @@ var StoreCore = (function () {
       asset: 'assets/pet/skin-claude-normal.png'
     },
     {
+      id: 'skin-claude-medium', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 中号',
+      character: 'Claude', variant: 'medium', price: 650,
+      desc: '约 3.5 头身的中号版本，橘发橙花与黑金刺绣长裙，捧着书。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-claude-medium.png'
+    },
+    {
       id: 'skin-claude-mini', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 小号',
       character: 'Claude', variant: 'mini', price: 500,
       desc: '同款橘发少女的 Q 版小号（大头小身），占地更小。纯展示，不影响任何 AI 次数或额度。',

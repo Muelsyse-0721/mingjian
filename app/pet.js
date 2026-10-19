@@ -32,6 +32,52 @@
 
   var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+  /* ---------------- 鼠标跟随（可开关，默认开） ---------------- */
+  var FOLLOW_KEY = 'jp-pet-follow';
+  var followOn = readStore(FOLLOW_KEY) !== '0';
+  var reactEl = pet.querySelector('.react');
+  var followBtn = document.getElementById('btn-follow');
+
+  function applyFollow(nx, ny) {
+    if (!followOn || reduceMotion || !reactEl) return;
+    var deg = Math.max(-7, Math.min(7, nx * 7));
+    var dx = Math.max(-5, Math.min(5, nx * 5));
+    var dy = Math.max(-4, Math.min(4, ny * 4));
+    reactEl.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) +
+      'px) rotate(' + deg.toFixed(1) + 'deg)';
+  }
+
+  function refreshFollowBtn() {
+    if (!followBtn) return;
+    followBtn.textContent = followOn ? '🎯 跟随鼠标：开' : '🎯 跟随鼠标：关';
+    followBtn.style.opacity = followOn ? '1' : '.6';
+  }
+
+  if (followBtn) {
+    followBtn.addEventListener('click', function () {
+      followOn = !followOn;
+      writeStore(FOLLOW_KEY, followOn ? '1' : '0');
+      if (!followOn && reactEl) reactEl.style.transform = '';
+      refreshFollowBtn();
+      say(followOn ? '好，我看着你的鼠标。' : '那我不看了，专心看书。');
+    });
+  }
+  refreshFollowBtn();
+
+  document.addEventListener('mousemove', function (e) {
+    if (!followOn) return;
+    var r = pet.getBoundingClientRect();
+    var cx = r.left + r.width / 2;
+    var cy = r.top + r.height / 2;
+    applyFollow((e.clientX - cx) / (window.innerWidth / 2), (e.clientY - cy) / (window.innerHeight / 2));
+  });
+
+  /* iframe 浮层：由父页面转发归一化光标 */
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (d && d.source === 'jp-pet-host' && d.type === 'cursor') applyFollow(d.nx, d.ny);
+  });
+
   var MOODS = ['normal', 'happy', 'confused', 'sad', 'sleepy'];
   var LINES = {
     normal: ['今天也来押一注？', '我在看池子呢～', '鱼片，你好呀！', '别叫我胖鱼，我叫大肥鱼！', '（发呆）…啊，你说啥？', '偷懒中，勿扰～', '有事找大哥大姐，我先躺会。', '这盆白饭，我先干为敬。'],
@@ -97,7 +143,7 @@
 
   /* ---------------- 皮肤 ---------------- */
   var SKIN_IDS = [
-    'skin-claude-normal', 'skin-claude-mini',
+    'skin-claude-normal', 'skin-claude-mini', 'skin-claude-medium',
     'skin-gpt-normal', 'skin-gpt-mini',
     'skin-gemini', 'skin-grok', 'skin-kimi', 'skin-glm', 'skin-qwen'
   ];
@@ -520,10 +566,61 @@
     return '唔…这个我还不太会，等我升级了再答你～（先问：下注 / 积分 / 奖池 / 天梯 / 借分）';
   }
 
+  var PERSONA_CLAUDE = '你是「Claude小姐」：温柔、书卷气，喜欢旧书、红茶与花。称呼对方为"你"。' +
+    '回答控制在 60 字以内，语气克制，不吹嘘，不编造具体数字；不确定就说不确定。不要讨论政治敏感话题。';
+  var PERSONA_FISH = '你是明鉴站的大肥鱼桌宠：贪吃、爱玩、嘴硬心软，喜欢白饭。' +
+    '回答控制在 60 字以内，口语化、可爱，可以自称"我"。';
+
   function ask(q) {
     setMood('normal');
+    var persona = activeChar === 'claude' ? PERSONA_CLAUDE : PERSONA_FISH;
+    if (window.PetLLM && window.PetLLM.ready) {
+      say('让我想想…');
+      window.PetLLM.ask(q, persona).then(function (t) {
+        say(t || answer(q));
+      }).catch(function () { say(answer(q)); });
+      return;
+    }
     say(answer(q));
   }
+
+  /* ---- 模型连接设置 ---- */
+  (function wireLLM() {
+    var sel = document.getElementById('llm-provider');
+    var key = document.getElementById('llm-key');
+    var save = document.getElementById('llm-save');
+    var tip = document.getElementById('llm-tip');
+    if (!sel || !save || !window.PetLLM) return;
+    var c = window.PetLLM.getConfig();
+    sel.value = c.provider || 'none';
+    if (c.provider === 'deepseek') key.value = c.deepseekKey || '';
+    else if (c.provider === 'workbuddy') key.value = (c.wbEndpoint || '') + '|' + (c.wbKey || '');
+    sel.addEventListener('change', function () { key.value = ''; });
+    save.addEventListener('click', function () {
+      var p = sel.value;
+      var v = (key.value || '').trim();
+      if (p === 'none') {
+        window.PetLLM.setConfig({ provider: 'none' });
+        if (tip) tip.textContent = '已断开模型，使用内置问答。';
+        return;
+      }
+      if (p === 'deepseek') {
+        if (!v) { if (tip) tip.textContent = '请填 DeepSeek API Key'; return; }
+        window.PetLLM.setConfig({ provider: 'deepseek', deepseekKey: v });
+        if (tip) tip.textContent = '已连接 DeepSeek（deepseek-chat），只存本机。';
+        say('好，我接上 DeepSeek 了。');
+        return;
+      }
+      var parts = v.split('|');
+      if (parts.length < 2 || !parts[0] || !parts[1]) {
+        if (tip) tip.textContent = 'WorkBuddy 请填 endpoint|publishableKey';
+        return;
+      }
+      window.PetLLM.setConfig({ provider: 'workbuddy', wbEndpoint: parts[0].trim(), wbKey: parts[1].trim() });
+      if (tip) tip.textContent = '已连接 WorkBuddy 云端模型，只存本机。';
+      say('好，我接上 WorkBuddy 了。');
+    });
+  })();
 
   var qaSend = document.getElementById('qa-send');
   var qaInput = document.getElementById('qa-input');

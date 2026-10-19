@@ -126,6 +126,23 @@
   }
 
   /* ---------- 拖动（坐标由 iframe 内上报） ---------- */
+  /* 鼠标跟随：把归一化光标转发给 iframe 内的桌宠（rAF 节流） */
+  var followPending = null;
+  document.addEventListener('mousemove', function (ev) {
+    if (!frame || frame.style.display === 'none') return;
+    followPending = ev;
+    if (followPending._raf) return;
+    followPending._raf = requestAnimationFrame(function () {
+      var e = followPending; followPending = null;
+      var r = frame.getBoundingClientRect();
+      var nx = (e.clientX - (r.left + r.width / 2)) / (window.innerWidth / 2);
+      var ny = (e.clientY - (r.top + r.height / 2)) / (window.innerHeight / 2);
+      try {
+        frame.contentWindow.postMessage({ source: 'jp-pet-host', type: 'cursor', nx: nx, ny: ny }, '*');
+      } catch (_) {}
+    });
+  }, { passive: true });
+
   window.addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d || d.source !== 'jp-pet') return;
