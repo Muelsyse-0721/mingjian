@@ -60,7 +60,7 @@ AMM（LMSR）需要一个资金雄厚的做市方承担库存风险；订单簿�
 | 抽水被人为调高 | `feeBps ≤ 500`（5%） | `test_Revert_FeeAboveCap` |
 | 舍入导致超额派彩 | 向下取整 + fuzz 不变量 | `testFuzz_TotalPayoutNeverExceedsPool` |
 
-共 16 个用例（含 1 个 fuzz），覆盖正常流程、争议流程与 9 类攻击。
+共 **21 个用例**（20 个功能/攻击 + 1 个 fuzz 不变量），覆盖正常流程、争议流程与 9 类攻击。
 
 ## 运行
 
