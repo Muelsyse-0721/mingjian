@@ -31,14 +31,16 @@ var StoreCore = (function () {
     NAMECOLOR: 'namecolor',
     FRAME: 'frame',
     THEME: 'theme',
-    TITLE: 'title'
+    TITLE: 'title',
+    PETSKIN: 'pet-skin'
   };
 
   var KIND_LABELS = {
     namecolor: '名讳颜色',
     frame: '头像框',
     theme: '主题',
-    title: '称号'
+    title: '称号',
+    'pet-skin': '桌宠皮肤'
   };
 
   /* ------------------------------------------------------------
@@ -100,6 +102,185 @@ var StoreCore = (function () {
     }
   ];
 
+  /* ------------------------------------------------------------
+   * 桌宠皮肤目录（本任务新增，2026-10）
+   *
+   * 9 款桌宠皮肤：Claude / GPT 各有「正常号」「小号」两种体量，
+   * 其余 Gemini / Grok / Kimi / 智谱 / 千问 各一款。
+   *
+   * 形状：{ id, kind, name, character, variant, price, desc, asset }
+   *   character —— 角色标识（用于分组展示，非商标授权声明）
+   *   variant   —— 'normal' | 'mini'（正常号 / 小号）
+   *   asset     —— 前端资源相对路径（相对 app/ 根目录）
+   *
+   * 与旧装饰一样：纯展示，不带来任何数值或功能优势；价格只在
+   * canBuy / composeOrderRow 里作为「积分单价」使用。
+   * ------------------------------------------------------------ */
+  var PET_SKINS = deepFreeze([
+    {
+      id: 'skin-claude-normal', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 正常号',
+      character: 'Claude', variant: 'normal', price: 800,
+      desc: '橘色系桌宠，正常号体型，常驻在页面右下角。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-claude-normal.png'
+    },
+    {
+      id: 'skin-claude-mini', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 小号',
+      character: 'Claude', variant: 'mini', price: 500,
+      desc: '同款橘色桌宠的小号体型，占地更小。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-claude-mini.png'
+    },
+    {
+      id: 'skin-gpt-normal', kind: KINDS.PETSKIN, name: 'GPT 桌宠 · 正常号',
+      character: 'GPT', variant: 'normal', price: 800,
+      desc: '绿色系桌宠，正常号体型，常驻在页面右下角。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-gpt-normal.png'
+    },
+    {
+      id: 'skin-gpt-mini', kind: KINDS.PETSKIN, name: 'GPT 桌宠 · 小号',
+      character: 'GPT', variant: 'mini', price: 500,
+      desc: '同款绿色桌宠的小号体型，占地更小。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-gpt-mini.png'
+    },
+    {
+      id: 'skin-gemini', kind: KINDS.PETSKIN, name: 'Gemini 桌宠',
+      character: 'Gemini', variant: 'normal', price: 600,
+      desc: '蓝紫渐变桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-gemini.png'
+    },
+    {
+      id: 'skin-grok', kind: KINDS.PETSKIN, name: 'Grok 桌宠',
+      character: 'Grok', variant: 'normal', price: 600,
+      desc: '深灰冷色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-grok.png'
+    },
+    {
+      id: 'skin-kimi', kind: KINDS.PETSKIN, name: 'Kimi 桌宠',
+      character: 'Kimi', variant: 'normal', price: 600,
+      desc: '月白配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-kimi.png'
+    },
+    {
+      id: 'skin-glm', kind: KINDS.PETSKIN, name: '智谱桌宠',
+      character: '智谱', variant: 'normal', price: 600,
+      desc: '青蓝配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-glm.png'
+    },
+    {
+      id: 'skin-qwen', kind: KINDS.PETSKIN, name: '千问桌宠',
+      character: '千问', variant: 'normal', price: 600,
+      desc: '靛紫配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      asset: 'assets/pet/skin-qwen.png'
+    }
+  ]);
+
+  /* 目录 = 旧装饰 + 桌宠皮肤（同一 kind 共用单槽换装规则） */
+  var CATALOG = Object.freeze(COSMETICS.concat(PET_SKINS));
+
+  /* ------------------------------------------------------------
+   * VIP 权益说明书（给商城 UI 直接渲染）
+   *
+   * ★ 数字来源（app/js/vip.js，2026-10-19 核对）★
+   *   TIERS.vip1 —— 第 32–44 行：price_points 2000、days 30、
+   *                  fee_discount 0.20、loan_limit_bonus 300、
+   *                  max_open_questions 5
+   *   TIERS.vip2 —— 第 45–57 行：price_points 5000、days 90、
+   *                  fee_discount 0.40、loan_limit_bonus 800、
+   *                  max_open_questions 10
+   *   BASE.max_open_questions = 3 —— 第 71–74 行
+   *   effectiveFee / feeRebateOf / loanLimit / maxQuestions —— 第 134–169 行
+   *   DEFAULT_SETTINGS.default_fee = 0.05、credit_max = 8000
+   *                  —— app/js/online.js 第 20、27 行
+   *
+   * ★ 只列真正生效的权益 ★
+   *   TIERS 里还有 arbitration_priority / analytics_plus 两个参数，
+   *   但当前版本没有任何界面或流程读取它们（online.js 未接线），
+   *   因此不列为已生效权益，只在 VIP_TIER_CARDS.notes 里说明。
+   * ------------------------------------------------------------ */
+  var VIP_BENEFITS = deepFreeze([
+    {
+      tier: 'vip1',
+      name: '明鉴会员',
+      items: [
+        {
+          key: 'fee_discount', label: '抽水返利', value: '20%',
+          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 20%」返还积分（VipCore.feeRebateOf）。'
+        },
+        {
+          key: 'fee_effective', label: '实际抽水率', value: '4%',
+          desc: '默认抽水 5% 时，本人实际只承担 4%（VipCore.effectiveFee）；返利只惠及本人。'
+        },
+        {
+          key: 'loan_limit_bonus', label: '借款额度加成', value: '+300 分',
+          desc: '信用额度上限在基础值上再加 300 分（默认 8000 → 8300，VipCore.loanLimit）。'
+        },
+        {
+          key: 'max_open_questions', label: '同时建题上限', value: '5 题',
+          desc: '同时进行中的建题上限由 3 题提升到 5 题（VipCore.maxQuestions）。'
+        }
+      ]
+    },
+    {
+      tier: 'vip2',
+      name: '明鉴尊享',
+      items: [
+        {
+          key: 'fee_discount', label: '抽水返利', value: '40%',
+          desc: '本人中奖结算时，按「中奖本金 × 基础抽水 × 40%」返还积分（VipCore.feeRebateOf）。'
+        },
+        {
+          key: 'fee_effective', label: '实际抽水率', value: '3%',
+          desc: '默认抽水 5% 时，本人实际只承担 3%（VipCore.effectiveFee）；返利只惠及本人。'
+        },
+        {
+          key: 'loan_limit_bonus', label: '借款额度加成', value: '+800 分',
+          desc: '信用额度上限在基础值上再加 800 分（默认 8000 → 8800，VipCore.loanLimit）。'
+        },
+        {
+          key: 'max_open_questions', label: '同时建题上限', value: '10 题',
+          desc: '同时进行中的建题上限由 3 题提升到 10 题（VipCore.maxQuestions）。'
+        }
+      ]
+    }
+  ]);
+
+  /* 商城卡片：{ tier, name, price, days, highlights, notes } */
+  var VIP_TIER_CARDS = deepFreeze([
+    {
+      tier: 'vip1',
+      name: '明鉴会员',
+      price: 2000,
+      days: 30,
+      highlights: [
+        '中奖抽水返利 20%（默认 5% → 实付 4%）',
+        '借款额度上限 +300 分',
+        '同时建题上限 3 → 5 题',
+        '到期自动失效，不带任何扣费'
+      ],
+      notes: [
+        '只影响本人：不改变全池赔率，不改变其他玩家派彩，也不改变公共奖池分配比例。',
+        '积分购买，不可充值 / 提现 / 转让 / 兑换真实货币。',
+        '续费时从当前到期时间顺延；已过期则从购买时刻重新起算。'
+      ]
+    },
+    {
+      tier: 'vip2',
+      name: '明鉴尊享',
+      price: 5000,
+      days: 90,
+      highlights: [
+        '中奖抽水返利 40%（默认 5% → 实付 3%）',
+        '借款额度上限 +800 分',
+        '同时建题上限 3 → 10 题',
+        '90 天有效期，单日成本低于会员档'
+      ],
+      notes: [
+        '只影响本人：不改变全池赔率，不改变其他玩家派彩，也不改变公共奖池分配比例。',
+        '积分购买，不可充值 / 提现 / 转让 / 兑换真实货币。',
+        '「仲裁优先」「高级看板」两个参数已在 VipCore 预留（arbitration_priority / analytics_plus），当前版本尚未接入界面，不构成已生效权益。'
+      ]
+    }
+  ]);
+
   /* ---------- 小工具 ---------- */
   function round2(v) { return Math.round(Number(v) * 100) / 100; }
 
@@ -110,6 +291,13 @@ var StoreCore = (function () {
       out[k] = (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
     });
     return out;
+  }
+
+  /* 新数据一律深冻结：防止 UI 层误改价格 / 权益数字 */
+  function deepFreeze(o) {
+    if (!o || typeof o !== 'object' || Object.isFrozen(o)) return o;
+    Object.keys(o).forEach(function (k) { deepFreeze(o[k]); });
+    return Object.freeze(o);
   }
 
   function numText(v) {
@@ -136,8 +324,8 @@ var StoreCore = (function () {
     if (!item) return null;
     var id = (typeof item === 'string') ? item : item.id;
     if (!id) return null;
-    for (var i = 0; i < COSMETICS.length; i++) {
-      if (COSMETICS[i].id === id) return COSMETICS[i];
+    for (var i = 0; i < CATALOG.length; i++) {
+      if (CATALOG[i].id === id) return CATALOG[i];
     }
     return null;
   }
@@ -161,9 +349,9 @@ var StoreCore = (function () {
    * 目录查询
    * ------------------------------------------------------------ */
 
-  /* 返回目录副本；kind 可选，用于按子类过滤 */
+  /* 返回目录副本（旧装饰 + 桌宠皮肤）；kind 可选，用于按子类过滤 */
   function listCosmetics(kind) {
-    var list = COSMETICS.map(clone);
+    var list = CATALOG.map(clone);
     if (kind) {
       list = list.filter(function (it) { return it.kind === kind; });
     }
@@ -174,6 +362,39 @@ var StoreCore = (function () {
   function getItem(id) {
     var it = resolve(id);
     return it ? clone(it) : null;
+  }
+
+  /* 桌宠皮肤目录副本；可按 character 过滤（如 'Claude'） */
+  function listPetSkins(character) {
+    var list = PET_SKINS.map(clone);
+    if (character) {
+      list = list.filter(function (it) { return it.character === character; });
+    }
+    return list;
+  }
+
+  /* 按 id 取桌宠皮肤副本；不是皮肤则返回 null */
+  function getSkin(id) {
+    var it = resolve(id);
+    return (it && it.kind === KINDS.PETSKIN) ? clone(it) : null;
+  }
+
+  /* 某档 VIP 的权益条目副本；未知档位返回 [] */
+  function vipBenefitsOf(tier) {
+    for (var i = 0; i < VIP_BENEFITS.length; i++) {
+      if (VIP_BENEFITS[i].tier === tier) {
+        return VIP_BENEFITS[i].items.map(clone);
+      }
+    }
+    return [];
+  }
+
+  /* 某档 VIP 的商城卡片副本；未知档位返回 null */
+  function vipCardOf(tier) {
+    for (var i = 0; i < VIP_TIER_CARDS.length; i++) {
+      if (VIP_TIER_CARDS[i].tier === tier) return clone(VIP_TIER_CARDS[i]);
+    }
+    return null;
   }
 
   /* ------------------------------------------------------------
@@ -223,7 +444,7 @@ var StoreCore = (function () {
    * 换装判定（纯前端预校验；最终以 DB 权限/约束为准）
    *
    * 单槽语义：目录里同一 kind 同一时刻只展示一件——
-   *   名讳颜色一件、头像框一个、主题一套、称号一个。
+   *   名讳颜色一件、头像框一个、主题一套、称号一个、桌宠皮肤一款。
    * 换装 = 「同类其它行 equipped=false + 目标行 equipped=true」。
    * 若将来某个 kind 允许多件同时展示，宿主应忽略 equipPlan 返回的
    * unequipItemIds，只把 equipItemId 置 true。
@@ -272,6 +493,38 @@ var StoreCore = (function () {
       return !!other && other.kind === it.kind;
     });
     return { equipItemId: it.id, unequipItemIds: unequip };
+  }
+
+  /* ------------------------------------------------------------
+   * 桌宠皮肤换装补丁
+   *
+   * composeSkinPatch(uid, skinId, isEquipped) →
+   *   { uid, item_id, patch, preUnequipAll }
+   *
+   * 规则与 equipPlan 一致：同一时刻只装备一件（「先卸后装」）。
+   *   - patch 只含 equipped 一列 → 恰好命中 09-equip.sql 的
+   *     GRANT UPDATE (equipped)，不会尝试改 item_id / uid。
+   *   - preUnequipAll = true 表示装备前宿主须先执行
+   *     update({ equipped: false }).eq('uid', uid).eq('equipped', true)；
+   *     卸下（isEquipped=false）时无需预清空。
+   * ------------------------------------------------------------ */
+  function mustSkin(skinId) {
+    var it = resolve(skinId);
+    if (!it || it.kind !== KINDS.PETSKIN) {
+      throw new Error('StoreCore: 未找到桌宠皮肤 ' + (skinId && skinId.id ? skinId.id : skinId));
+    }
+    return it;
+  }
+
+  function composeSkinPatch(uid, skinId, isEquipped) {
+    var it = mustSkin(skinId);
+    var eq = !!isEquipped;
+    return {
+      uid: mustUid(uid),
+      item_id: it.id,
+      patch: { equipped: eq },
+      preUnequipAll: eq
+    };
   }
 
   /* ------------------------------------------------------------
@@ -370,11 +623,19 @@ var StoreCore = (function () {
     KINDS: KINDS,
     KIND_LABELS: KIND_LABELS,
     COSMETICS: listCosmetics(),   /* 只读副本；请优先用 listCosmetics() */
+    PET_SKINS: deepFreeze(PET_SKINS.map(clone)),
+    VIP_BENEFITS: deepFreeze(VIP_BENEFITS.map(clone)),
+    VIP_TIER_CARDS: deepFreeze(VIP_TIER_CARDS.map(clone)),
     listCosmetics: listCosmetics,
+    listPetSkins: listPetSkins,
     getItem: getItem,
+    getSkin: getSkin,
+    vipBenefitsOf: vipBenefitsOf,
+    vipCardOf: vipCardOf,
     canBuy: canBuy,
     canEquip: canEquip,
     composeEquipPatch: composeEquipPatch,
+    composeSkinPatch: composeSkinPatch,
     equipPlan: equipPlan,
     composeOrderRow: composeOrderRow,
     composeHoldingRow: composeHoldingRow,

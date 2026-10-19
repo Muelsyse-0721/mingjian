@@ -792,3 +792,54 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--blue); bord
 .vote-row label { flex: 0 0 auto; min-width: 90px; }
 .vote-row .index-bar { flex: 1; height: 8px; }
 .vote-num { font-size: 12px; color: var(--text-3, #888780); min-width: 76px; text-align: right; }
+
+/* ===== AI 参与者标识（必须显式、不可伪装真人） ===== */
+.ai-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: .5px;
+  color: #fff;
+  background: #5B6C8F;
+  vertical-align: 1px;
+  cursor: help;
+}
+.ai-name { color: #3F5578; }
+.ai-note {
+  font-size: 12px;
+  color: #6b7787;
+  background: #F3F6FA;
+  border: 1px dashed #cfdae8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+.ai-roster-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ai-roster-table th, .ai-roster-table td { padding: 6px 8px; border-bottom: 1px solid #edf1f6; text-align: left; }
+.ai-roster-table th { color: #7b8695; font-weight: 600; font-size: 12px; }
+.board-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.board-tabs .btn { width: auto; padding: 5px 14px; }
+.board-tabs .btn.active { background: #2f5d9e; color: #fff; border-color: #2f5d9e; }
+.ai-console-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ai-console-actions .btn { width: auto; padding: 6px 12px; }
+.ai-stat { font-size: 12px; color: #6b7787; }
+
+/* AI 研判块（题卡内） */
+.ai-insight {
+  margin-top: 8px;
+  border: 1px solid #e3ebf5;
+  background: #F8FBFF;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ai-insight-title { font-size: 11px; color: #5B6C8F; font-weight: 700; margin-bottom: 4px; letter-spacing: .5px; }
+.ai-insight-row { font-size: 12px; color: #33465e; padding: 4px 0; border-top: 1px dashed #e6edf6; }
+.ai-insight-row:first-of-type { border-top: 0; }
+.ai-insight-note { color: #6b7787; margin-top: 2px; line-height: 1.55; }
+.ai-insight-more { font-size: 11px; color: #8a93a0; margin-top: 4px; }
+

@@ -1,0 +1,14 @@
+{
+  "name": "dafeiyu-desktop-pet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "大肥鱼桌宠 · macOS 桌面版（Electron 壳，加载 app/pet.html）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:full": "electron . --full"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0"
+  }
+}

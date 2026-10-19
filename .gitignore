@@ -13,3 +13,11 @@ Thumbs.db
 *.log
 *.tmp
 nohup.out
+
+# 大体积素材：不进仓库
+app/assets/_orig/
+app/assets/voice-test/
+app/assets/ref-frames/
+app/assets/*_expression__*.png
+app/assets/pet/*_20*.png
+app/assets/pet/_src/

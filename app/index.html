@@ -179,13 +179,16 @@
         <div class="card-title" data-page-node-id="O3tl7AxllUDN8nmt73W9TI">对线房管理（下架 / 强制揭晓）</div>
         <div id="admin-debates" data-page-node-id="LHM91TF2vWa4aG8VzFGzJ4"></div>
       </div>
-      <div class="card" data-page-node-id="C5CxfwkeBagFHByDFx5RCH">
-        <div class="card-title" data-page-node-id="LFmfUEMhDHaWtC92Z4iduz">仲裁队列（社区裁决 → 执行改判 / 驳回）</div>
+      <div class="card" data-page-node-id="C5CxfwkeBagFHByDFx5RCH">        <div class="card-title" data-page-node-id="LFmfUEMhDHaWtC92Z4iduz">仲裁队列（社区裁决 → 执行改判 / 驳回）</div>
         <div id="admin-disputes" data-page-node-id="LGhSO5tNUhTlrstez8CxI8"></div>
       </div>
       <div class="card" data-page-node-id="uuWLCLVrTHAjYHUASrpy4T">
         <div class="card-title" data-page-node-id="INNunbRrvfgm8gz3zv64ug">问题管理（置顶 / 下架 / 注入利息池 / 删除）</div>
         <div id="admin-questions" data-page-node-id="IN4J0lWrqbmt6WvNn9lVZd"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">AI 活动（模型参与者 · 公开身份，非真人）</div>
+        <div id="admin-ai"></div>
       </div>
       <div class="card" id="admin-settings" data-page-node-id="8S65gwF4JFMiB7F2FJ4ott"></div>
     </div>
@@ -212,6 +215,10 @@
 <div class="modal-mask" id="login-mask" data-page-node-id="q2GG8by6AXHvgIzWjaPwxD">
   <div class="modal" style="max-width:380px" data-page-node-id="GXzxlwIVPuQfDwuCHXYMQI">
     <div class="modal-title" data-page-node-id="qZzE83EnS4cyIaQVPyJBvS">电话登录 · 明鉴</div>
+    <div class="board-tabs" style="margin:10px 0 4px">
+      <button class="btn active" type="button" id="tab-otp">验证码登录</button>
+      <button class="btn" type="button" id="tab-pw">密码登录</button>
+    </div>
     <p class="hint" data-page-node-id="hJmNDqqzAYBHWmVGvPvptp">绑定手机号登录，战绩与身份更安全。新用户将引导设置名号。</p>
     <div class="field" data-page-node-id="60NVz11cmJBAifkbbZ56us">
       <label data-page-node-id="hKwKxbAPoaYjKP1Hlfj2Qe">手机号</label>
@@ -230,8 +237,14 @@
       <label data-page-node-id="kkKpyjkLr8NcCJ6k7NQRbF">设置名号（2-12 字，展示在天梯榜与战绩）</label>
       <input type="text" id="login-nick" maxlength="12" placeholder="如：观察员甲" data-page-node-id="SIS1ghLpIw0PHwK5RpFj32">
     </div>
+    <div class="field" id="login-pw-field" style="display:none" data-page-node-id="lpwfield">
+      <label data-page-node-id="lpwlabel">密码</label>
+      <input type="password" id="login-pw" maxlength="64" placeholder="注册时设置的密码" data-page-node-id="lpwinput">
+      <p class="hint">密码只能在新号注册时设置；老账号请用验证码登录。</p>
+    </div>
     <div class="modal-actions" data-page-node-id="AloYnfPkxY0Kp0km1Ia1Cv">
       <button class="btn btn-primary" id="btn-login" style="width:auto" data-page-node-id="Ps0jHU6BMd2CwDGidVDEUi">登录 / 注册</button>
+      <button class="btn" id="btn-pw-login" style="width:auto;display:none" data-page-node-id="btnpwlogin">密码登录</button>
     </div>
     <p class="err" id="login-err" data-page-node-id="86byFcxAEZRSCO0n0Rws9J"></p>
   </div>
@@ -257,6 +270,19 @@
 <script src="js/store.js"></script>
 <script src="js/vip.js"></script>
 <script src="js/monthly.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/ai-agents.js"></script>
 <script src="js/online.js"></script>
+
+<!-- ========== 大肥鱼桌宠 · 默认常驻浮层（不影响主站逻辑） ========== -->
+<iframe id="pet-frame" title="大肥鱼桌宠" scrolling="no"
+  style="position:fixed;right:14px;bottom:14px;width:200px;height:210px;border:0;background:transparent;z-index:9000;"></iframe>
+<div id="pet-controls" style="position:fixed;left:14px;bottom:14px;z-index:9001;display:flex;gap:8px;align-items:center;">
+  <button id="pet-toggle" title="展开大肥鱼（问答 / 钢盆 / 电饭煲）"
+    style="width:42px;height:42px;border-radius:50%;border:1px solid #dbe4ef;background:#fff;box-shadow:0 4px 12px rgba(40,80,140,.18);font-size:20px;cursor:pointer;line-height:1;">🐟</button>
+  <button id="pet-hide" title="收起大肥鱼（右键按钮亦可）"
+    style="width:30px;height:30px;border-radius:50%;border:1px solid #dbe4ef;background:#fff;box-shadow:0 3px 9px rgba(40,80,140,.15);font-size:13px;cursor:pointer;line-height:1;color:#8a919c;">✕</button>
+</div>
+<script src="js/pet-embed.js"></script>
 </body>
 </html>

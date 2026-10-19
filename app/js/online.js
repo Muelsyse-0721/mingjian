@@ -22,16 +22,16 @@ var OnlineCore = (function () {
     announcement: '',
     maintenance: false,
     loan_enabled: true,
-    credit_initial: 300,
-    credit_step: 100,
-    credit_max: 2000,
-    credit_min: 100,
+    credit_initial: 800,
+    credit_step: 200,
+    credit_max: 8000,
+    credit_min: 200,
     overdue_penalty: 200,
     loan_rate: 0.05,
     loan_term_days: 7,
     loan_late_rate: 0.01,
     force_mult: 1.5,
-    force_min_net: -300,
+    force_min_net: -800,
     min_bet: 10,
     min_loan: 10,
     rake_to_pool_pct: 60   /* 抽水中进公共奖池的百分比（其余销毁/通缩） */
@@ -304,11 +304,13 @@ var OnlineApp = (function () {
     publicVotes: [],
     prizePoolLog: [],
     userItems: [],
+    aiAgents: [],
     vip: null,
     settings: { tokenHash: '', site: OnlineCore.DEFAULT_SETTINGS, allocLog: [], season: null },
     uid: '', nickname: '',
     view: 'hall', hallTab: 'open', debateRoom: '',
     hallSort: 'new', hallCat: '', hallTime: '',
+    boardTab: 'human',
     evidenceDigest: {},
     busy: false, lastError: '',
     adminUnlocked: false,
@@ -397,6 +399,19 @@ var OnlineApp = (function () {
       .catch(function () { state.vip = null; });
   }
 
+  /* AI 花名册：表可能尚未创建（10-ai-agents.sql 未执行），任何失败都不得阻断主流程 */
+  function loadAiAgentsSafe() {
+    if (!cloud || !cloud.database) { state.aiAgents = []; return Promise.resolve(); }
+    try {
+      return Promise.resolve(cloud.database.from('jp_ai_agents').select('*'))
+        .then(function (r) { state.aiAgents = (r && !r.error && r.data) ? r.data : []; })
+        .catch(function () { state.aiAgents = []; });
+    } catch (e) {
+      state.aiAgents = [];
+      return Promise.resolve();
+    }
+  }
+
   /* ---------- 云端 ---------- */
   function initCloud() {
     cloud = window.WorkBuddyCloud.createWorkBuddyCloud({
@@ -449,7 +464,7 @@ var OnlineApp = (function () {
   function refresh() {
     setBusy(true);
     return loadData()
-      .then(function () { return Promise.all([loadPrizePool(), loadUserItems(), loadVip()]); })
+      .then(function () { return Promise.all([loadPrizePool(), loadUserItems(), loadVip(), loadAiAgentsSafe()]); })
       .then(function () { return checkBankruptcy(); })
       .then(function () { return checkDisputeStakes(); })
       .then(function () { return checkVoteSettles(); })
@@ -537,6 +552,85 @@ var OnlineApp = (function () {
   function check(r) {
     if (r && r.error) throw new Error(r.error.message || '云端写入失败');
     return r;
+  }
+
+  /* ---------- AI 参与者工具（公开身份：人格代号 + 编号 + AI 标记，绝不伪装真人） ---------- */
+  function aiCoreReady() { return typeof AiCore !== 'undefined'; }
+
+  function isAiUid(u) {
+    if (aiCoreReady()) return AiCore.isAi(u);
+    return /^ai-/.test(String(u || ''));
+  }
+
+  /* AI 展示名（含人格代号与编号）+ AI 徽章；非 AI 原样返回昵称 */
+  function aiNameHTML(u, nickname) {
+    var fallback = nickname || '匿名';
+    if (!aiCoreReady()) return esc(fallback);
+    var t = AiCore.tagOf(u);
+    if (!t) return esc(fallback);
+    return '<span class="ai-name">' + esc(t.label) + '</span>' +
+      '<span class="ai-badge" title="AI 参与者：' + esc(t.label) + '（非真人）">AI</span>';
+  }
+
+  /* 仅徽章（用于已有名字的地方，如证据脚注） */
+  function aiBadgeOnly(u) {
+    if (!aiCoreReady()) return '';
+    var t = AiCore.tagOf(u);
+    return t ? '<span class="ai-badge" title="AI 参与者：' + esc(t.label) + '（非真人）">AI</span>' : '';
+  }
+
+  /* 某题参与者统计：按 uid 去重，AI 单独计数（单列，避免把机器算成真人热度） */
+  function participantStats(qid) {
+    var seen = {}, total = 0, ai = 0;
+    (state.bets || []).forEach(function (b) {
+      if (b.qid !== qid) return;
+      if (b.kind && b.kind !== 'bet' && b.kind !== 'stake') return;
+      if (!b.uid || seen[b.uid]) return;
+      seen[b.uid] = 1;
+      total += 1;
+      if (isAiUid(b.uid)) ai += 1;
+    });
+    return { total: total, ai: ai, human: total - ai };
+  }
+
+  /* 某 uid 的可用现金（净资产 − 在押 + 负债，与天梯榜同口径） */
+  function cashOfUid(u) {
+    if (typeof LoanCore === 'undefined') return 0;
+    var rows = LoanCore.leaderboard(state.bets, state.loans, state.payments, state.settings) || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].uid === u) {
+        return Number(rows[i].total) - Number(rows[i].openStake || 0) + Number(rows[i].debt || 0);
+      }
+    }
+    return 0;
+  }
+
+  /* 题卡内 AI 研判：展示 AI 的下注理由与已知事实（非真人） */
+  function aiInsightRow(q) {
+    var rows = (state.bets || []).filter(function (b) {
+      return b.qid === q.qid && isAiUid(b.uid) && b.note;
+    });
+    if (!rows.length) return '';
+    var html = '<div class="ai-insight"><div class="ai-insight-title">AI 研判 · 非真人</div>';
+    rows.slice(0, 3).forEach(function (b) {
+      html += '<div class="ai-insight-row">' +
+        '<b>' + aiNameHTML(b.uid, b.nickname) + '</b>' +
+        ' · 押「' + esc(OnlineCore.outcomeLabelOf(q, b.outcome_id)) + '」 ' + b.stake + ' 分' +
+        '<div class="ai-insight-note">' + esc(b.note) + '</div></div>';
+    });
+    if (rows.length > 3) {
+      html += '<div class="ai-insight-more">另有 ' + (rows.length - 3) + ' 条 AI 研判</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* 花名册：优先云端 jp_ai_agents（可运营修改），回退内置固定花名册 */
+  function aiRoster() {
+    if (state.aiAgents && state.aiAgents.length) {
+      return state.aiAgents.slice().sort(function (a, b) { return (a.no || 0) - (b.no || 0); });
+    }
+    return aiCoreReady() ? AiCore.AI_ROSTER.slice() : [];
   }
 
   /* ---------- 动作：投注 ---------- */
@@ -952,7 +1046,19 @@ var OnlineApp = (function () {
           '<div class="stat-value">' + t.price_points + ' 分 / ' + t.days + ' 天</div>' +
           '<button class="btn btn-primary" style="width:auto;margin-top:6px" data-buy-vip="' + esc(t.id) + '">购买</button></div>';
       });
-      html += '</div></div>';
+      html += '</div>';
+      if (StoreCore && Array.isArray(StoreCore.VIP_BENEFITS)) {
+        StoreCore.VIP_BENEFITS.forEach(function (vt) {
+          html += '<div class="card-title" style="margin:14px 0 6px">' + esc(vt.name) + ' 的权益</div>' +
+            '<table class="ai-roster-table"><thead><tr><th>权益</th><th style="width:110px">数值</th><th>说明</th></tr></thead><tbody>';
+          (vt.items || []).forEach(function (it) {
+            html += '<tr><td>' + esc(it.label) + '</td><td><b>' + esc(it.value) + '</b></td>' +
+              '<td class="ai-stat">' + esc(it.desc || '') + '</td></tr>';
+          });
+          html += '</tbody></table>';
+        });
+      }
+      html += '</div>';
     }
     if (typeof StoreCore !== 'undefined') {
       html += '<div class="card rules-card"><div class="card-title">装饰商城（积分购买，买后积分消耗、不可退换/转让）</div><div class="stat-row">';
@@ -965,7 +1071,10 @@ var OnlineApp = (function () {
         var action = own
           ? ('<p class="hint">' + (isEq ? '已装备' : '已拥有') + '</p>' + (isEq ? '' : '<button class="btn" style="width:auto;margin-top:6px" data-equip-item="' + esc(it.id) + '">装备</button>'))
           : ('<button class="btn" style="width:auto;margin-top:6px" data-buy-item="' + esc(it.id) + '">购买</button>');
-        html += '<div class="stat-card"><div class="stat-label">' + esc(it.name) + '</div>' +
+        var thumb = (it.kind === 'pet-skin' && it.asset)
+          ? '<img src="' + esc(it.asset) + '" alt="" loading="lazy" style="width:52px;height:52px;object-fit:contain;display:block;margin:0 auto 4px">'
+          : '';
+        html += '<div class="stat-card">' + thumb + '<div class="stat-label">' + esc(it.name) + '</div>' +
           '<div class="stat-value">' + it.price + ' 分</div>' + action + '</div>';
       });
       html += '</div></div>';
@@ -1242,10 +1351,8 @@ var OnlineApp = (function () {
       { key: 'manual', label: '待人工揭晓' },
       { key: 'settled', label: '已揭晓档案', extra: voting ? '（仲裁 ' + voting + '）' : '' }
     ];
-    /* 空分区隐藏（进行中与档案常驻），避免噪声 */
-    var tabs = defs.filter(function (t) {
-      return t.key === 'open' || t.key === 'settled' || byZone[t.key] > 0;
-    });
+    /* 五分区常驻显示：即使为空也列出，让用户知道站内有哪些状态 */
+    var tabs = defs;
     box.innerHTML = tabs.map(function (t) {
       return '<button class="hall-tab' + (state.hallTab === t.key ? ' active' : '') +
         '" data-tab2="' + t.key + '">' + t.label + ' · ' + byZone[t.key] + (t.extra || '') + '</button>';
@@ -1342,6 +1449,12 @@ var OnlineApp = (function () {
       (q.pinned ? '<span class="q-status pinned">置顶</span>' : '') +
       (q.hidden && state.adminUnlocked ? '<span class="q-status hidden">已下架</span>' : '') +
       (openStake ? '<span class="q-status open">我已投 ' + openStake + ' 分</span>' : '') +
+      (function () {
+        var ps = participantStats(q.qid);
+        if (!ps.total) return '';
+        return '<span class="q-deadline" title="AI 参与者单独计数，不计入真人热度">参与 ' + ps.total + ' 人' +
+          (ps.ai ? '（其中 AI ' + ps.ai + '）' : '') + '</span>';
+      })() +
       '</div>';
 
     var outcomes = '<div class="q-outcomes">' + q.outcomes.map(function (o) {
@@ -1411,7 +1524,7 @@ var OnlineApp = (function () {
     return '<div class="q-card' + (expired ? ' q-expired' : '') + (zone === 'voting' ? ' q-voting' : '') + '">' + head +
       '<div class="q-title">' + esc(q.title) + '</div>' +
       (q.descr ? '<div class="q-desc">' + esc(q.descr) + '</div>' : '') +
-      outcomes + oddsTrend(q) + betRow + votePanelHtml + hostRow + evidenceRow + '</div>';
+      outcomes + oddsTrend(q) + betRow + aiInsightRow(q) + votePanelHtml + hostRow + evidenceRow + '</div>';
   }
 
   /* ---------- 公投面板（v1.2） ---------- */
@@ -1526,12 +1639,51 @@ var OnlineApp = (function () {
     var box = $('board-list');
     if (!box) return;
     var rows = LoanCore.leaderboard(state.bets, state.loans, state.payments, state.settings);
-    if (!rows.length) {
-      box.innerHTML = '<div class="card"><div class="q-empty">还没有人下注。天梯榜将在第一笔投注后出现。</div></div>';
-      return;
-    }
+    var humans = rows.filter(function (p) { return !isAiUid(p.uid); });
+    var ais = rows.filter(function (p) { return isAiUid(p.uid); });
+    var tab = state.boardTab === 'ai' ? 'ai' : 'human';
+
     var html = '<div class="card"><div class="card-title">天梯榜 · 按净资产排名（现金 + 在押 − 负债）</div>' +
-      '<table class="ledger-table"><thead><tr>' +
+      '<div class="ai-note">天梯<b>真人榜与 AI 榜分开</b>。AI 参与者一律标注人格代号与编号' +
+      '（如 <b>数据党 #01</b> 带 <span class="ai-badge">AI</span>），绝不伪装真人；' +
+      'AI 不参与公投与仲裁投票。</div>' +
+      '<div class="board-tabs" style="margin-top:10px">' +
+      '<button class="btn' + (tab === 'human' ? ' active' : '') + '" data-board-tab="human">真人榜（' + humans.length + '）</button>' +
+      '<button class="btn' + (tab === 'ai' ? ' active' : '') + '" data-board-tab="ai">AI 榜（' + ais.length + '）</button>' +
+      '</div>';
+
+    var list = tab === 'ai' ? ais : humans;
+    if (!list.length) {
+      html += '<div class="q-empty">' + (tab === 'ai'
+        ? '还没有 AI 参与记录。站长可在「站长台 → AI 活动」初始化并让 AI 下注。'
+        : '还没有真人下注。天梯榜将在第一笔投注后出现。') + '</div>';
+    } else {
+      html += boardTable(list);
+    }
+    html += '</div>';
+
+    /* AI 花名册说明：公开身份，人格代号 + 编号 */
+    html += aiRosterCard();
+
+    /* 信源质量榜：证据被采纳与揭晓命中的玩家（AI 同样标注） */
+    var src = EvidenceCore.sourceBoard(state.evidence).slice(0, 10);
+    if (src.length) {
+      html += '<div class="card"><div class="card-title">信源质量榜 · 证据被采纳与揭晓命中的玩家</div>' +
+        '<table class="ledger-table"><thead><tr><th>#</th><th>玩家</th><th>提交</th><th>采纳</th><th>揭晓命中</th><th>积分</th></tr></thead><tbody>';
+      src.forEach(function (p, i) {
+        html += '<tr' + (p.uid === state.uid ? ' style="background:#F5F8FC"' : '') + '>' +
+          '<td>' + (i + 1) + '</td><td>' + aiNameHTML(p.uid, p.nickname) + (p.uid === state.uid ? '（我）' : '') + '</td>' +
+          '<td>' + p.submitted + '</td><td>' + p.accepted + '</td><td>' + p.validated + '</td>' +
+          '<td>' + p.score + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    box.innerHTML = html;
+    bindBoardTabs();
+  }
+
+  function boardTable(rows) {
+    var html = '<table class="ledger-table"><thead><tr>' +
       '<th>#</th><th>玩家</th><th style="text-align:right">净资产</th><th style="text-align:right">投注盈亏</th>' +
       '<th>战绩</th><th style="text-align:right">在押</th><th style="text-align:right">负债</th><th>徽章</th>' +
       '</tr></thead><tbody>';
@@ -1541,7 +1693,7 @@ var OnlineApp = (function () {
         ? BadgeCore.earnedBadges(p.uid, badgeData()).length + ' 枚' : '—';
       html += '<tr' + (p.uid === state.uid ? ' style="background:#F5F8FC"' : '') + '>' +
         '<td>' + (i + 1) + '</td>' +
-        '<td>' + esc(p.nickname) + me + '</td>' +
+        '<td>' + aiNameHTML(p.uid, p.nickname) + me + '</td>' +
         '<td class="amt" style="color:' + scoreColor(p.total) + '">' + fmt(p.total) + '</td>' +
         '<td class="amt" style="color:' + scoreColor(p.betNet) + '">' + fmt(p.betNet) + '</td>' +
         '<td>' + p.won + ' 胜 / ' + p.lost + ' 负' + (p.settled ? '（' + p.winRate + '%）' : '') + '</td>' +
@@ -1550,22 +1702,39 @@ var OnlineApp = (function () {
         '<td>' + badges + '</td>' +
         '</tr>';
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table>';
+    return html;
+  }
 
-    /* 信源质量榜：证据被采纳与揭晓命中的玩家 */
-    var src = EvidenceCore.sourceBoard(state.evidence).slice(0, 10);
-    if (src.length) {
-      html += '<div class="card"><div class="card-title">信源质量榜 · 证据被采纳与揭晓命中的玩家</div>' +
-        '<table class="ledger-table"><thead><tr><th>#</th><th>玩家</th><th>提交</th><th>采纳</th><th>揭晓命中</th><th>积分</th></tr></thead><tbody>';
-      src.forEach(function (p, i) {
-        html += '<tr' + (p.uid === state.uid ? ' style="background:#F5F8FC"' : '') + '>' +
-          '<td>' + (i + 1) + '</td><td>' + esc(p.nickname) + (p.uid === state.uid ? '（我）' : '') + '</td>' +
-          '<td>' + p.submitted + '</td><td>' + p.accepted + '</td><td>' + p.validated + '</td>' +
-          '<td>' + p.score + '</td></tr>';
+  function aiRosterCard() {
+    var list = aiRoster();
+    if (!list.length) return '';
+    var html = '<div class="card"><div class="card-title">AI 参与者说明 · 公开身份，非真人</div>' +
+      '<div class="ai-note">下列 10 个账号是<b>平台内置的 AI 人格参与者</b>（本地算法，不调用外部模型 API），由站长在本地驱动、以固定 uid 记账；' +
+      '每人初始 2,000 分（平台赠予，不可充值 / 提现 / 转让）。AI <b>不参与公投与仲裁投票</b>；' +
+      '在题卡、榜单与对线房里均以「人格代号 + 编号 + <span class="ai-badge">AI</span>」标注。</div>' +
+      '<table class="ai-roster-table"><thead><tr><th>编号</th><th>模型</th><th>人格</th><th style="text-align:right">净资产</th><th>状态</th></tr></thead><tbody>';
+    list.forEach(function (a) {
+      var engaged = (state.bets || []).some(function (b) { return b.uid === a.uid; });
+      var cash = cashOfUid(a.uid);
+      html += '<tr><td>#' + String(a.no).padStart(2, '0') + '</td>' +
+        '<td>' + esc(a.display || a.model) + ' <span class="ai-badge">AI</span></td>' +
+        '<td>' + esc(a.persona || '—') + '</td>' +
+        '<td class="amt" style="text-align:right">' + (engaged ? fmt(cash) : '—') + '</td>' +
+        '<td class="ai-stat">' + (engaged ? '已参与' : '未初始化') + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function bindBoardTabs() {
+    var btns = document.querySelectorAll('[data-board-tab]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        state.boardTab = this.getAttribute('data-board-tab');
+        renderBoard();
       });
-      html += '</tbody></table></div>';
     }
-    box.innerHTML = html;
   }
 
   /* ---------- 渲染：预期指数（市场信念快照） ---------- */
@@ -1615,6 +1784,19 @@ var OnlineApp = (function () {
   }
 
   /* ---------- 渲染：我的战绩（含借贷） ---------- */
+  /* 个人中心卡片（登录账号信息；密码能力由 ProfileCore/Auth 提供，缺失则降级） */
+  function profileCardHTML() {
+    if (typeof ProfileCore === 'undefined') return '';
+    var phone = (AuthModule && typeof AuthModule.getPhone === 'function') ? AuthModule.getPhone() : '';
+    var pwState = (AuthModule && typeof AuthModule.getPasswordState === 'function') ? AuthModule.getPasswordState() : '';
+    var hint = ProfileCore.composePasswordHint(pwState === 'set');
+    return '<div class="card"><div class="card-title">个人中心</div>' +
+      '<div class="bet-row"><span>名号：<b>' + esc(state.nickname || '未设置') + '</b></span>' +
+      (phone ? '<span>手机：' + esc(ProfileCore.maskPhone(phone)) + '</span>' : '') +
+      '<span>身份：' + (state.isAdmin ? '站长' : '普通用户') + '</span></div>' +
+      '<div class="ai-note">' + esc(hint) + '</div></div>';
+  }
+
   function renderMine() {
     var avail = totalPoints();
     var sum = loanSummary();
@@ -1625,7 +1807,7 @@ var OnlineApp = (function () {
       var won = settledBets.filter(function (b) { return b.status === 'won' }).length;
       var staked = mine.reduce(function (s, b) { return s + Number(b.stake); }, 0);
       var recovered = mine.reduce(function (s, b) { return s + (b.status === 'won' ? Number(b.payout) : 0); }, 0);
-      box.innerHTML =
+      box.innerHTML = profileCardHTML() +
         '<div class="stat-row">' +
         '<div class="stat-card"><div class="stat-label">可用积分</div><div class="stat-value" style="color:' + scoreColor(avail) + '">' + fmt(avail) + '</div></div>' +
         '<div class="stat-card"><div class="stat-label">净资产</div><div class="stat-value" style="color:' + scoreColor(sum.netWorth) + '">' + fmt(sum.netWorth) + '</div></div>' +
@@ -1879,10 +2061,14 @@ var OnlineApp = (function () {
   }
 
   /* 云端 LLM 流式调用：返回累计文本；失败抛错（调用方兜底规则分） */
-  function callCloudLLM(prompt, maxTokens) {
+  /* AI 参与者研判专用模型：hunyuan-chat 为非推理模型，能稳定输出 JSON；
+     hy3 是推理模型，短 max_tokens 会被思考过程吃光、正文为空。 */
+  var AI_LLM_MODEL = 'hunyuan-chat';
+
+  function callCloudLLM(prompt, maxTokens, model) {
     return Promise.resolve().then(function () {
       return cloud.llm.chat.completions.create({
-        model: LLM_MODEL, stream: true, max_tokens: maxTokens || 800,
+        model: model || LLM_MODEL, stream: true, max_tokens: maxTokens || 800,
         messages: [{ role: 'user', content: prompt }]
       });
     }).then(function (stream) {
@@ -2051,6 +2237,13 @@ var OnlineApp = (function () {
         '<button class="btn" data-debate-side="b" style="width:auto">以乙方发言</button>' +
         '<span class="hint">当前身份：' + debateSideLabel(mySide) + '</span></div>';
     }
+    /* 邀请 AI 对手（房主可用；AI 以「人格代号 #编号 + AI」署名，不伪装真人） */
+    if (isHost && phase !== 'settled') {
+      html += '<div class="bet-row"><span>邀请 AI 对手发言：</span>' +
+        '<button class="btn" data-ai-side="a" style="width:auto">AI 代甲方</button>' +
+        '<button class="btn" data-ai-side="b" style="width:auto">AI 代乙方</button>' +
+        '<span class="hint">AI 发言会标注人格代号与编号</span></div>';
+    }
 
     /* 房主操作 */
     if (isHost && phase !== 'settled') {
@@ -2100,7 +2293,7 @@ var OnlineApp = (function () {
         }
         html += '<div class="debate-post' + (p.uid === state.uid ? ' mine' : '') + '">' +
           '<div class="debate-post-head">' + debateSideLabel(side) + ' · ' + esc(side === 'a' ? r.side_a : r.side_b) +
-          '　<span class="hint">' + esc(p.nickname || '匿名') + ' · ' + fmtTs(p.posted_at) + '</span></div>' +
+          '　<span class="hint">' + aiNameHTML(p.uid, p.nickname) + ' · ' + fmtTs(p.posted_at) + '</span></div>' +
           '<div class="debate-post-body">' + esc(p.content) + '</div>' + scoreHtml + '</div>';
       });
       /* 本轮 AI 评分按钮：双方都发言且未评分时，任何人可触发（先到先得写入） */
@@ -2167,6 +2360,11 @@ var OnlineApp = (function () {
       b.addEventListener('click', function () {
         setMyDebateSide(r.did, b.getAttribute('data-debate-side'));
         renderAll();
+      });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-ai-side]'), function (b) {
+      b.addEventListener('click', function () {
+        inviteAiDebate(r, b.getAttribute('data-ai-side'));
       });
     });
     on('btn-debate-post', 'click', function () { postDebate(r, mySide); });
@@ -2236,6 +2434,29 @@ var OnlineApp = (function () {
   function hideDebate(r, hide) {
     withCloud(function () {
       return cloud.database.from('jp_debates').update({ hidden: hide }).eq('did', r.did).then(check);
+    });
+  }
+
+  /* 邀请 AI 代某一方发言（房主可用；写行 uid 以 ai- 开头，RLS 允许房主/站长写入） */
+  function inviteAiDebate(r, side) {
+    if (!aiCoreReady()) { alert('AI 模块未加载'); return; }
+    if (typeof DebateCore === 'undefined') return;
+    var round = DebateCore.currentRoundOf(r, state.debatePosts);
+    var groups = DebateCore.postsOf(r, state.debatePosts) || [];
+    var cur = groups.filter(function (g) { return g.round === round; })[0] || {};
+    if (cur[side]) { alert('这一方本轮已经发过言了。'); return; }
+    var roster = aiRoster();
+    if (!roster.length) { alert('花名册为空'); return; }
+    var agent = roster[(Number(round) + (side === 'a' ? 0 : 3)) % roster.length];
+    var stance = side === 'a' ? r.side_a : r.side_b;
+    var line = AiCore.composeLine(agent, r.topic, side, round, 'room|' + r.did + '|' + side, stance);
+    if (!line) { alert('生成发言失败'); return; }
+    if (!confirm('邀请「' + agent.display + '」代' + (side === 'a' ? '甲方' : '乙方') + '发言？\n\n' + line)) return;
+    withCloud(function () {
+      var row = AiCore.buildDebatePost(agent, r, side, round, line);
+      return cloud.database.from('jp_debate_posts').insert(row).then(function (res) {
+        if (res && res.error) throw new Error(res.error.message || 'AI 发言失败');
+      });
     });
   }
 
@@ -2413,7 +2634,7 @@ var OnlineApp = (function () {
             : '<span class="evidence-link">' + esc(e.title) + '</span>') +
           badges + '</div>' +
           (e.summary ? '<div class="evidence-sum">' + esc(e.summary) + '</div>' : '') +
-          '<div class="evidence-foot"><span class="hint">' + esc(e.nickname || '匿名') + ' · ' + fmtTs(e.created_at) + '</span>' +
+          '<div class="evidence-foot"><span class="hint">' + aiNameHTML(e.uid, e.nickname) + ' · ' + fmtTs(e.created_at) + '</span>' +
           '<span class="evidence-votes">' +
           '<button class="btn-link' + (myVote === 'up' ? ' voted' : '') + '" data-ev-vote="' + e.eid + ':up">👍 ' + (Number(e.votes_up) || 0) + '</button>' +
           '<button class="btn-link' + (myVote === 'down' ? ' voted' : '') + '" data-ev-vote="' + e.eid + ':down">👎 ' + (Number(e.votes_down) || 0) + '</button>' +
@@ -2821,6 +3042,200 @@ var OnlineApp = (function () {
     }).catch(function () { state.isAdmin = false; applyAdminNav(); });
   }
 
+  /* ---------- 站长台：AI 活动控制台（公开身份，站长代写） ---------- */
+  function renderAdminAi() {
+    var box = $('admin-ai');
+    if (!box) return;
+    if (!aiCoreReady()) { box.innerHTML = '<div class="q-empty">AI 模块未加载（js/ai-agents.js）</div>'; return; }
+    var roster = aiRoster();
+    if (!roster.length) { box.innerHTML = '<div class="q-empty">花名册为空。</div>'; return; }
+    var aiBets = (state.bets || []).filter(function (b) { return isAiUid(b.uid); });
+    var aiOpen = aiBets.filter(function (b) { return b.status === 'open' && (!b.kind || b.kind === 'bet'); });
+    var openQs = hallQuestions().filter(function (q) { return OnlineCore.phaseOf(q) === 'open'; });
+    var html = '<div class="ai-note">AI 以固定 uid 记账，展示名 = 人格代号 + 编号，永不伪装真人；AI 不参与公投与仲裁。' +
+      '进行中题目 ' + openQs.length + ' 道 · AI 在押 ' + aiOpen.length + ' 笔。</div>' +
+      '<table class="ai-roster-table"><thead><tr><th>编号</th><th>模型</th><th>人格</th>' +
+      '<th style="text-align:right">可用现金</th><th>已下注</th></tr></thead><tbody>';
+    roster.forEach(function (a) {
+      var cash = AiCore.cashOfBets(a.uid, state.bets, state.settings);
+      var n = aiBets.filter(function (b) { return b.uid === a.uid && (!b.kind || b.kind === 'bet'); }).length;
+      html += '<tr><td>#' + String(a.no || 0).padStart(2, '0') + '</td>' +
+        '<td>' + esc(a.display || a.model) + ' <span class="ai-badge">AI</span></td>' +
+        '<td>' + esc(a.persona || '—') + '</td>' +
+        '<td class="amt" style="text-align:right">' + fmt(cash) + '</td>' +
+        '<td>' + n + ' 笔</td></tr>';
+    });
+    html += '</tbody></table><div class="ai-console-actions">' +
+      '<button class="btn btn-primary" id="btn-ai-bet">让 AI 下注一轮</button>' +
+      '<button class="btn" id="btn-ai-evidence">让 AI 补证据（最多 5 条）</button>' +
+      '<button class="btn" id="btn-ai-debate">让 AI 接对线发言</button>' +
+      '<button class="btn" id="btn-ai-sync">同步花名册到云端</button>' +
+      '</div><p class="hint">AI 动作由当前站长会话代写（RLS 以 is_admin 授权，且仅允许 uid 以 ai- 开头的行）；' +
+      '仅在你在线时发生；单轮最多 30 笔，单笔 10–200 分。' +
+      (!state.aiAgents.length ? '<br>当前使用<b>内置花名册</b>（云端 jp_ai_agents 尚未初始化或 10-ai-agents.sql 未执行）。' : '') +
+      '</p>';
+    box.innerHTML = html;
+    on('btn-ai-bet', 'click', aiBetRound);
+    on('btn-ai-evidence', 'click', aiAddEvidence);
+    on('btn-ai-debate', 'click', aiTakeDebateTurn);
+    on('btn-ai-sync', 'click', aiSyncRoster);
+  }
+
+  function aiSyncRoster() {
+    if (!aiCoreReady()) return;
+    if (!state.adminUnlocked) { alert('请先解锁站长台'); return; }
+    var existing = {};
+    (state.aiAgents || []).forEach(function (a) { existing[a.uid] = 1; });
+    var todo = AiCore.AI_ROSTER.filter(function (a) { return !existing[a.uid]; });
+    if (!todo.length) { alert('花名册已是最新（10 个模型都已登记）。'); return; }
+    if (!confirm('把 ' + todo.length + ' 个 AI 身份写入云端 jp_ai_agents？\n\n需已执行 app/sql/10-ai-agents.sql，否则会报错。')) return;
+    withCloud(function () {
+      var chain = Promise.resolve();
+      todo.forEach(function (a) {
+        chain = chain.then(function () {
+          return cloud.database.from('jp_ai_agents').insert({
+            uid: a.uid, model: a.model, no: a.no, display: a.display,
+            persona: a.persona, risk: a.risk, contrarian: a.contrarian,
+            category_prefs: a.categoryPrefs, bio: a.bio,
+            start_points: a.startPoints || 2000
+          }).then(function (r) { if (r && r.error) throw new Error(r.error.message || '花名册写入失败'); });
+        });
+      });
+      return chain;
+    });
+  }
+
+  function aiBetRound() {
+    if (!aiCoreReady()) return;
+    if (!state.adminUnlocked) { alert('请先解锁站长台'); return; }
+    var roster = aiRoster();
+    var plan = AiCore.planRound(roster, hallQuestions(), state.bets, state.settings, {
+      maxN: 10, seed: 'llm-' + new Date().toISOString().slice(0, 10)
+    });
+    if (!plan.length) { alert('没有可下注的进行中题目，或 AI 现金不足。'); return; }
+    if (!confirm('让 ' + plan.length + ' 个 AI 逐个分析后下注？\n\n' +
+      '使用云端模型 hy3（额度倍率 x0.00，不产生费用），每人大约 2–4 秒；期间页面会显示忙碌。\n' +
+      '分析失败会自动回退为按人格参数下注。')) return;
+
+    withCloud(function () {
+      var chain = Promise.resolve();
+      plan.forEach(function (row) {
+        chain = chain.then(function () { return aiPace(900); }).then(function () {
+          var agent = AiCore.agentOf(row.uid);
+          var q = findQuestion(row.qid);
+          if (!q) return null;
+          var qBets = state.bets.filter(function (b) {
+            return b.qid === q.qid && b.status === 'open' && (!b.kind || b.kind === 'bet');
+          });
+          return callCloudLLM(AiCore.buildAnalyzePrompt(agent, q), 600, AI_LLM_MODEL).then(function (txt) {
+            var an = AiCore.parseAnalysis(txt, q);
+            var out = Object.assign({}, row);
+            if (an && an.outcome) {
+              out.outcome_id = an.outcome;
+              out.odds_at_bet = AiCore.oddsOf(q, qBets, an.outcome);
+            }
+            out.note = AiCore.composeNote(an) || '（AI 未给出理由）';
+            return insertAiBet(out);
+          }).catch(function () {
+            return insertAiBet(Object.assign({}, row, {
+              note: '（AI 临时无法分析，已按人格参数下注）'
+            }));
+          });
+        });
+      });
+      return chain;
+    });
+  }
+
+  function aiPace(ms) {
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  function insertAiBet(row) {
+    return cloud.database.from('jp_bets').insert(row).then(function (r) {
+      if (r && r.error) throw new Error(r.error.message || 'AI 下注失败');
+    });
+  }
+
+  function aiAddEvidence() {
+    if (!aiCoreReady()) return;
+    if (!state.adminUnlocked) { alert('请先解锁站长台'); return; }
+    var roster = aiRoster();
+    var cand = hallQuestions().filter(function (q) { return OnlineCore.phaseOf(q) === 'open'; })
+      .filter(function (q) {
+        return !(state.evidence || []).some(function (e) { return e.qid === q.qid && isAiUid(e.uid); });
+      }).slice(0, 5);
+    if (!cand.length) { alert('进行中的题目都已有一条 AI 背景资料，无需再补。'); return; }
+    if (!confirm('为 ' + cand.length + ' 道题各生成一条 AI 背景资料？\n\n' +
+      '会调用云端模型 hy3（x0.00）整理现状与数量级，附检索链接；内容中立，站长可驳回。')) return;
+
+    withCloud(function () {
+      var picked = [];
+      var chain = Promise.resolve();
+      cand.forEach(function (q, i) {
+        chain = chain.then(function () { return aiPace(800); }).then(function () {
+          var agent = roster[i % roster.length];
+          return callCloudLLM(AiCore.buildEvidencePrompt(agent, q), 500, AI_LLM_MODEL).then(function (txt) {
+            var item = AiCore.parseEvidence(txt) || AiCore.composeEvidence(agent, q);
+            if (item && item.url) picked.push({ q: q, agent: agent, item: item });
+          }).catch(function () {
+            var item = AiCore.composeEvidence(agent, q);
+            if (item && item.url) picked.push({ q: q, agent: agent, item: item });
+          });
+        });
+      });
+      return chain.then(function () {
+        var c2 = Promise.resolve();
+        picked.forEach(function (p) {
+          c2 = c2.then(function () {
+            var row = AiCore.buildEvidenceRow(p.agent, p.q, p.item);
+            return cloud.database.from('jp_evidence').insert(row)
+              .then(function (r) { if (r && r.error) throw new Error(r.error.message || 'AI 证据写入失败'); });
+          });
+        });
+        return c2;
+      });
+    });
+  }
+
+  function aiTakeDebateTurn() {
+    if (!aiCoreReady()) return;
+    if (!state.adminUnlocked) { alert('请先解锁站长台'); return; }
+    if (typeof DebateCore === 'undefined') { alert('对线模块未加载'); return; }
+    var roster = aiRoster();
+    var rooms = (state.debates || []).filter(function (r) { return r.status === 'live'; });
+    if (!rooms.length) { alert('没有进行中（live）的对线房。'); return; }
+    var rows = [];
+    rooms.forEach(function (r, ri) {
+      var round = DebateCore.currentRoundOf(r, state.debatePosts);
+      var groups = DebateCore.postsOf(r, state.debatePosts) || [];
+      var cur = groups.filter(function (g) { return g.round === round; })[0] || { a: null, b: null };
+      ['a', 'b'].forEach(function (side) {
+        if (cur[side]) return;
+        var agent = roster[(ri * 2 + (side === 'b' ? 1 : 0)) % roster.length];
+        var stance = side === 'a' ? r.side_a : r.side_b;
+        var line = AiCore.composeLine(agent, r.topic, side, round, 'room|' + r.did + '|' + side, stance);
+        var row = AiCore.buildDebatePost(agent, r, side, round, line);
+        if (row) rows.push(row);
+      });
+    });
+    if (!rows.length) { alert('当前没有空缺的一方，或 AI 发言生成失败。'); return; }
+    if (!confirm('让 AI 代 ' + rows.length + ' 个空缺位发言？\n' +
+      rows.slice(0, 6).map(function (r) {
+        return '· ' + r.nickname + '（' + (r.side === 'a' ? '甲' : '乙') + '方）';
+      }).join('\n'))) return;
+    withCloud(function () {
+      var chain = Promise.resolve();
+      rows.forEach(function (row) {
+        chain = chain.then(function () {
+          return cloud.database.from('jp_debate_posts').insert(row)
+            .then(function (r) { if (r && r.error) throw new Error(r.error.message || 'AI 发言失败'); });
+        });
+      });
+      return chain;
+    });
+  }
+
   function renderAdmin() {
     var gate = $('admin-gate');
     var body = $('admin-body');
@@ -2853,6 +3268,7 @@ var OnlineApp = (function () {
     renderAdminDisputes();
     renderAdminQuestions();
     renderAdminSettings();
+    renderAdminAi();
   }
 
   function unlockAdmin() {
@@ -3717,7 +4133,11 @@ var OnlineApp = (function () {
     var pend = AuthModule.getPending();
     if (!pend) { if (le) le.textContent = '请先获取验证码'; return; }
     if (!code) { if (le) le.textContent = '请输入验证码'; return; }
-    AuthModule.verify(phone, code).then(function (res) {
+    var pw = ($('login-pw') || {}).value ? $('login-pw').value : '';
+    var runner = (!pend.isExistingUser && pw && AuthModule.signUpWithPassword)
+      ? AuthModule.signUpWithPassword(phone, pw, code)
+      : AuthModule.verify(phone, code);
+    runner.then(function (res) {
       if (le) le.textContent = '';
       if (res && res.error) { if (le) le.textContent = res.error.message; return; }
       if (!pend.isExistingUser) {
@@ -3731,24 +4151,74 @@ var OnlineApp = (function () {
     });
   }
 
+  var autoRefreshTimer = null;
+
+  /* 登录路径也需要自动刷新：此前只有刷新后的 enterAsAuthed/legacyInit 才启动 */
+  function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    autoRefreshTimer = setInterval(function () {
+      if (AuthModule && AuthModule.isAuthed() && !state.busy) refresh();
+    }, REFRESH_MS);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && AuthModule && AuthModule.isAuthed() && !state.busy) refresh();
+    });
+  }
+
   function finishLogin() {
     state.uid = AuthModule.getUid();
     state.nickname = AuthModule.getNickname();
     state.adminUnlocked = adminUnlockedFor(state.uid);
+    /* 关键修复：登录后必须把通用事件绑上，否则要点一次刷新才可点（曾因只调 renderAll） */
+    wireCommonUI();
     syncAdminRole();
     closeLoginModal();
-    AuthModule.migrateOldUid().then(function () { refresh(); });
+    AuthModule.migrateOldUid().then(function () { refresh(); startAutoRefresh(); });
   }
+
+  var wiredCommon = false;
 
   function setupLoginUI() {
     if (!AuthModule) return;
     var sendBtn = $('btn-send-code'), loginBtn = $('btn-login');
     if (sendBtn) sendBtn.addEventListener('click', onSendCode);
     if (loginBtn) loginBtn.addEventListener('click', onLoginSubmit);
+    /* 登录方式切换：验证码 / 密码 */
+    var tabOtp = $('tab-otp'), tabPw = $('tab-pw');
+    function switchMode(mode) {
+      var isPw = mode === 'pw';
+      if (tabOtp) tabOtp.classList.toggle('active', !isPw);
+      if (tabPw) tabPw.classList.toggle('active', isPw);
+      ['btn-send-code', 'login-code-field', 'login-nick-field'].forEach(function (id) {
+        var el = $(id);
+        if (el) el.style.display = isPw ? 'none' : (id === 'login-code-field' ? (el.dataset.everShown ? '' : 'none') : '');
+      });
+      var pwf = $('login-pw-field'); if (pwf) pwf.style.display = isPw ? '' : 'none';
+      var lb = $('btn-login'); if (lb) lb.style.display = isPw ? 'none' : '';
+      var pb = $('btn-pw-login'); if (pb) pb.style.display = isPw ? '' : 'none';
+    }
+    if (tabOtp) tabOtp.addEventListener('click', function () { switchMode('otp'); });
+    if (tabPw) tabPw.addEventListener('click', function () { switchMode('pw'); });
+    var pwBtn = $('btn-pw-login');
+    if (pwBtn) pwBtn.addEventListener('click', onPasswordLogin);
+  }
+
+  function onPasswordLogin() {
+    if (!AuthModule || !AuthModule.signInWithPassword) return;
+    var le = $('login-err'); if (le) le.textContent = '';
+    var phone = (($('login-phone') || {}).value || '').trim();
+    var pw = ($('login-pw') || {}).value || '';
+    if (!/^1\d{10}$/.test(phone)) { if (le) le.textContent = '请输入正确的 11 位手机号'; return; }
+    if (pw.length < 6) { if (le) le.textContent = '密码至少 6 位'; return; }
+    AuthModule.signInWithPassword(phone, pw).then(function (r) {
+      if (!r || !r.ok) { if (le) le.textContent = (r && r.error) || '密码登录失败'; return; }
+      finishLogin();
+    }).catch(function (e) { if (le) le.textContent = e.message || '密码登录失败'; });
   }
 
   /* ---------- 初始化 ---------- */
   function wireCommonUI() {
+    if (wiredCommon) return;
+    wiredCommon = true;
     on('btn-create-q', 'click', createQuestion);
     on('q-mode', 'change', function () {
       $('q-odds-field').style.display = $('q-mode').value === 'fixed' ? '' : 'none';

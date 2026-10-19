@@ -19,10 +19,10 @@ var LoanCore = (function () {
 
   var DEFAULTS = {
     loan_enabled: true,
-    credit_initial: 300,
-    credit_step: 100,
-    credit_max: 2000,
-    credit_min: 100,
+    credit_initial: 800,
+    credit_step: 200,
+    credit_max: 8000,
+    credit_min: 200,
     overdue_penalty: 200,
     loan_rate: 0.05,
     loan_term_days: 7,

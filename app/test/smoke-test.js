@@ -138,7 +138,7 @@ check('重新初始化后流水仍在', $('ledger').innerHTML.indexOf('ledger-ta
 console.log('[8] 信用借贷');
 click(w.document.querySelector('[data-view="betting"]'));
 check('借贷卡片渲染', $('loan-card').innerHTML.indexOf('信用借贷') !== -1);
-check('初始额度 300', $('loan-card').innerHTML.indexOf('>300<') !== -1);
+check('初始额度 800', $('loan-card').innerHTML.indexOf('>800<') !== -1);
 
 setInput($('loan-amount'), '100');
 check('到期需还实时计算 105', $('loan-due').textContent.indexOf('105') !== -1);
@@ -184,7 +184,7 @@ check('触发破产保护提示', w.__alerts.some(a => a.indexOf('破产保护')
 check('借款被核销（记录留存）', afterBk.loans.length === 1 && afterBk.loans[0].status === 'written_off');
 
 click(w.document.querySelector('[data-view="betting"]'));
-check('核销后额度恢复 300', $('loan-card').innerHTML.indexOf('>300<') !== -1);
+check('核销后额度恢复 800', $('loan-card').innerHTML.indexOf('>800<') !== -1);
 check('核销后负债清零', $('loan-card').innerHTML.indexOf('已核销') !== -1);
 check('核销记录展示', $('loan-card').innerHTML.indexOf('破产保护已核销') !== -1);
 

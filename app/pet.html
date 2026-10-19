@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大肥鱼桌宠 · v5</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; color:#1f2329; overflow-x:hidden;
+    background: radial-gradient(1100px 620px at 72% -10%, #eaf2fb 0%, #e6edf7 46%, #dfe8f3 100%); }
+  .demo { max-width:900px; margin:0 auto; padding:28px 18px 210px; }
+  .card { background:rgba(255,255,255,.86); border:1px solid #e4e9f0; border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 2px rgba(20,40,80,.04); }
+  .card h2 { font-size:15px; margin:0 0 6px; font-weight:600; }
+  .card p { font-size:13px; color:#5b6472; line-height:1.7; margin:4px 0; }
+  .muted { color:#8a919c; font-size:12px; }
+
+  /* ===== 桌宠本体：完全透明，没有任何白卡片 / 边框 / 阴影 ===== */
+  #pet { position:fixed; left:0; top:0; width:160px; height:160px; z-index:9999; touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; will-change:transform; }
+  #pet.dragging { cursor:grabbing; }
+  #pet[hidden] { display:none; }
+
+  .stage { position:relative; width:160px; height:160px; transform-origin:50% 90%; animation: petBob 2.6s ease-in-out infinite; }
+  .react, .sway, .breathe, .blink, .sticker { position:absolute; inset:0; transform-origin:50% 90%; }
+  .sway { animation: petTailSway 4.6s ease-in-out infinite; }
+  .breathe { animation: petBreathe 3.2s ease-in-out infinite; }
+
+  /* 白底彻底移除：背景 / 边框 / 阴影全部透明 */
+  .sticker { background:transparent; border:0; box-shadow:none; border-radius:0; overflow:visible; }
+
+  .face, .skin-img {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; opacity:0; transition:opacity .16s ease;
+    pointer-events:none; -webkit-user-drag:none;
+    filter: drop-shadow(0 7px 9px rgba(24,44,80,.16)); /* 剪影投影，不是白卡片阴影 */
+  }
+  .skin-img { display:none; }
+  #pet.has-skin .skin-img { display:block; opacity:1; }
+  #pet.has-skin .face { opacity:0 !important; }
+
+  /* 表情图切换（无皮肤时） */
+  #pet[data-face="calm"] .face-calm,
+  #pet[data-face="happy"] .face-happy,
+  #pet[data-face="sad"] .face-sad,
+  #pet[data-face="sleepy"] .face-sleepy,
+  #pet[data-face="confused"] .face-confused { opacity:1; }
+
+  /* ===== 持续动画（不是切图） ===== */
+  @keyframes petBob { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-4px) } }
+  @keyframes petBreathe { 0%,100%{ transform:scale(.98) } 50%{ transform:scale(1.02) } }
+  @keyframes petTailSway { 0%,100%{ transform:rotate(-1.6deg) } 50%{ transform:rotate(1.6deg) } }
+
+  .emote { position:absolute; pointer-events:none; opacity:0; transition:opacity .18s; font-weight:700; z-index:4; }
+  .emote-heart { left:-12px; top:-6px; font-size:26px; color:#ef5b8a; }
+  .emote-z { right:-8px; top:-4px; font-size:22px; color:#7c8aa0; }
+  #pet[data-mood="happy"] .emote-heart { opacity:1; }
+  #pet[data-mood="sleepy"] .emote-z { opacity:1; }
+
+  .prop { position:absolute; left:50%; bottom:-6px; transform:translateX(-50%) scale(.6); opacity:0; z-index:3; pointer-events:none; width:132px; }
+  .prop.show { animation: propPop 2.6s ease forwards; }
+  @keyframes propPop { 0%{opacity:0; transform:translateX(-50%) scale(.6)} 14%{opacity:1; transform:translateX(-50%) scale(1.06)} 28%{transform:translateX(-50%) scale(1)} 82%{opacity:1} 100%{opacity:0; transform:translateX(-50%) scale(1)} }
+
+  #pet-bubble { position:fixed; z-index:9999; max-width:240px; background:#fff; color:#22303f; border:1px solid #dbe4ef; border-radius:12px; padding:9px 12px; font-size:13px; line-height:1.6; box-shadow:0 6px 18px rgba(40,80,140,.15); opacity:0; transform:translateY(6px); transition:opacity .18s, transform .18s; pointer-events:none; }
+  #pet-bubble.show { opacity:1; transform:translateY(0); }
+  #pet-bubble::after { content:""; position:absolute; left:22px; bottom:-7px; width:12px; height:12px; background:#fff; border-right:1px solid #dbe4ef; border-bottom:1px solid #dbe4ef; transform:rotate(45deg); }
+
+  #pet-close { position:absolute; right:-4px; top:-4px; width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,.92); border:1px solid #d7dee8; color:#8a919c; font-size:13px; line-height:20px; text-align:center; cursor:pointer; display:none; z-index:5; }
+  #pet:hover #pet-close { display:block; }
+  #pet-restore { position:fixed; right:18px; bottom:18px; z-index:9998; display:none; background:#fff; border:1px solid #d7dee8; border-radius:999px; padding:8px 14px; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(40,80,140,.15); }
+  #pet-restore.show { display:block; }
+
+  #skin-pick { font-size:11px; color:#4b5563; background:#f4f6fb; border:1px solid #dbe4ef; border-radius:999px; padding:5px 8px; outline:none; cursor:pointer; max-width:140px; }
+  html.mini #skin-pick, html.plain #skin-pick { display:none !important; }
+
+  #qa { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9997; width:min(620px,calc(100% - 32px)); background:#fff; border:1px solid #dbe4ef; border-radius:14px; box-shadow:0 8px 24px rgba(40,80,140,.14); padding:10px 12px; }
+  #qa .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  #qa .chip { font-size:12px; color:#3b5bdb; background:#eef3ff; border:1px solid #d7e2ff; border-radius:999px; padding:4px 10px; cursor:pointer; }
+  #qa .acts { display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap; }
+  #qa .act { font-size:12px; background:#fff7ea; border:1px solid #f3d9a8; color:#9a6b00; border-radius:10px; padding:6px 10px; cursor:pointer; }
+  #qa .mute { margin-left:auto; font-size:12px; background:#f4f6fb; border:1px solid #dbe4ef; border-radius:10px; padding:6px 10px; cursor:pointer; color:#4b5563; }
+  #qa .row2 { display:flex; gap:8px; }
+  #qa input { flex:1; border:1px solid #d7dee8; border-radius:10px; padding:9px 12px; font-size:13px; outline:none; }
+  #qa button.send { border:0; background:#3b5bdb; color:#fff; border-radius:10px; padding:0 16px; font-size:13px; cursor:pointer; }
+  #qa .tip { font-size:11px; color:#9aa2ad; margin-top:6px; }
+
+  /* ===== 常驻嵌入模式（?mini=1）：只留桌宠本体，背景透明 ===== */
+  html.mini, html.mini body { background: transparent !important; }
+  html.mini body { overflow: hidden !important; margin:0; }
+  html.mini .demo,
+  html.mini #qa,
+  html.mini #pet-close,
+  html.mini #pet-restore,
+  html.mini #pet-bubble { display: none !important; }
+  html.mini #pet { left: 20px !important; top: 25px !important; }
+
+  /* 桌面版 / 透明嵌入：整个页面不铺任何底色 */
+  html.plain, html.plain body { background: transparent !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage, .sway, .breathe { animation: none !important; }
+    .face, .skin-img { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<script>if (location.search.indexOf('mini') >= 0) document.documentElement.classList.add('mini');</script>
+  <div class="demo">
+    <div class="card">
+      <h2>大肥鱼桌宠 · v5（真动画 + 皮肤）</h2>
+      <p>持续呼吸、上下浮动、尾巴轻摆、随机眨眼；静止时表情会在 <b>平静 / 开心 / 困惑</b> 之间自动呼吸式变化。点击它会蹦一下并说话，双击收起，拖动可换位置。</p>
+      <p class="muted">默认静音，需要出声请点底部「开启声音」· 右上角「换装」可切换 9 款角色皮肤 · 面板里的「换装」下拉可切 9 款皮肤 · 右下 ✕ 或双击隐藏，隐藏后点「叫出大肥鱼」恢复。</p>
+    </div>
+  </div>
+
+  <div id="pet" data-mood="normal" data-face="calm">
+    <div class="stage">
+      <div class="react">
+        <div class="sway">
+          <div class="breathe">
+            <div class="blink">
+              <div class="sticker">
+                <img class="skin-img" id="pet-skin" alt="" aria-hidden="true">
+                <img class="face face-calm" src="assets/face-calm.png" alt="">
+                <img class="face face-happy" src="assets/face-happy.png" alt="">
+                <img class="face face-sad" src="assets/face-sad.png" alt="">
+                <img class="face face-sleepy" src="assets/face-sleepy.png" alt="">
+                <img class="face face-confused" src="assets/face-confused.png" alt="">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="emote emote-heart">❤</div>
+      <div class="emote emote-z">💤</div>
+      <div class="prop prop-cooker">
+        <svg viewBox="0 0 140 120" width="132" xmlns="http://www.w3.org/2000/svg">
+          <rect x="30" y="58" width="80" height="54" rx="14" fill="#eef1f5" stroke="#9aa5b5" stroke-width="2.5"/>
+          <rect x="38" y="66" width="64" height="20" rx="8" fill="#f7f9fc" stroke="#d9dde6" stroke-width="2"/>
+          <path d="M40 56 q30 -16 60 0" fill="#ffffff" stroke="#d9dde6" stroke-width="2.5"/>
+          <ellipse cx="70" cy="58" rx="30" ry="8" fill="#ffffff" stroke="#d9dde6" stroke-width="2.5"/>
+          <path d="M34 54 q36 -34 72 0" fill="#dfe5ee" stroke="#9aa5b5" stroke-width="2.5"/>
+          <path d="M56 40 q-8 -10 0 -18" fill="none" stroke="#cfd6df" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+          <path d="M82 42 q8 -10 0 -18" fill="none" stroke="#cfd6df" stroke-width="3" stroke-linecap="round" opacity=".6"/>
+        </svg>
+      </div>
+    </div>
+    <div id="pet-close" title="隐藏桌宠（双击也可以）">✕</div>
+  </div>
+
+  <div id="pet-bubble"></div>
+  <button id="pet-restore">🐟 叫出大肥鱼</button>
+
+  <div id="qa">
+    <div class="chips">
+      <span class="chip" data-q="怎么下注">怎么下注？</span>
+      <span class="chip" data-q="积分哪来的">积分哪来的？</span>
+      <span class="chip" data-q="奖池是什么">奖池是什么？</span>
+      <span class="chip" data-q="天梯怎么排">天梯怎么排？</span>
+    </div>
+    <div class="acts">
+      <button class="act" id="act-bowl">🍚 端出钢盆</button>
+      <button class="act" id="act-cooker">🍚 电饭煲盛饭</button>
+      <select id="skin-pick" title="换装">
+        <option value="">默认 · 大肥鱼</option>
+        <option value="skin-claude-normal">Claude</option>
+        <option value="skin-claude-mini">Claude 小号</option>
+        <option value="skin-gpt-normal">GPT</option>
+        <option value="skin-gpt-mini">GPT 小号</option>
+        <option value="skin-gemini">Gemini</option>
+        <option value="skin-grok">Grok</option>
+        <option value="skin-kimi">Kimi</option>
+        <option value="skin-glm">GLM</option>
+        <option value="skin-qwen">千问</option>
+      </select>
+      <button class="mute" id="btn-mute">🔇 开启声音（默认静音）</button>
+    </div>
+    <div class="row2">
+      <input id="qa-input" placeholder="问问大肥鱼…（下注 / 积分 / 奖池 / 天梯 / 借分）">
+      <button class="send" id="qa-send">发送</button>
+    </div>
+    <div class="tip">内置脚本问答 + 浏览器中文萌音（不联网、不出额度）· 默认不发声。</div>
+  </div>
+
+<script src="js/pet-voice.js"></script>
+<script src="pet.js"></script>
+</body>
+</html>
