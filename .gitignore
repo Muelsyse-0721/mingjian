@@ -26,3 +26,4 @@ desktop/dist/
 desktop/winbuild/
 tools/data/*.json
 tools/data/*.lock
+tools/CosyVoice/
