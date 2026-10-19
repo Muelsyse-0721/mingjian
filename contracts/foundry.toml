@@ -4,7 +4,8 @@ test = "test"
 script = "script"
 out = "out"
 libs = ["lib"]
-solc_version = "0.8.24"
+# 本机 solc 下载源不可达，使用 brew 安装的本地编译器（换机器改回版本号即可）
+solc = "/opt/homebrew/bin/solc"
 optimizer = true
 optimizer_runs = 200
 via_ir = false

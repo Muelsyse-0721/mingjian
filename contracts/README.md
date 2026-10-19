@@ -102,3 +102,15 @@ contracts/
 ├── script/Deploy.s.sol          # 部署脚本
 └── foundry.toml
 ```
+
+
+---
+
+## 同仓库的第二个合约：AnchorRegistry（结算存证）
+
+本目录现在还包含 `src/AnchorRegistry.sol`——把已揭晓结果锚定到链上的存证合约（不碰资金）。
+产品侧的完整设计、运行手册与失败模式见 `docs/17-链上存证.md`。
+
+测试总数：**33 个**（PariMutuel 21 + AnchorRegistry 11 + 跨语言一致性 1）。
+其中 `test/CrossLanguage.t.sol` 的 root/leaf/proof 由 `tools/anchor-worker.mjs --self-test` 生成，
+在链上逐个验证——证明 JS 组树与 Solidity 验证器一致，而不是"看着像一致"。

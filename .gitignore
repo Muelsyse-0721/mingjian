@@ -24,3 +24,5 @@ app/assets/pet/_src/
 app/assets/pet/local/
 desktop/dist/
 desktop/winbuild/
+tools/data/*.json
+tools/data/*.lock

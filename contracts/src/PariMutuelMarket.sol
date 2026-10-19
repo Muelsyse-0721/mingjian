@@ -38,6 +38,7 @@ contract PariMutuelMarket {
         uint256 feeCollected;
         mapping(uint8 => uint256) poolOf; // 每个选项的池子
         mapping(address => mapping(uint8 => uint256)) stakeOf; // 谁押了什么
+        mapping(address => uint256) totalStakeOf; // 某人在本题的总投入（用于无人押中时退款）
         mapping(address => bool) claimed;
     }
 
@@ -120,6 +121,7 @@ contract PariMutuelMarket {
 
         m.stakeOf[msg.sender][outcome] += msg.value;
         m.poolOf[outcome] += msg.value;
+        m.totalStakeOf[msg.sender] += msg.value;
         m.totalPool += msg.value;
 
         emit BetPlaced(id, msg.sender, outcome, msg.value);
@@ -186,15 +188,17 @@ contract PariMutuelMarket {
         if (!m.finalized) revert NotFinalized();
         if (m.claimed[msg.sender]) revert AlreadyClaimed();
 
-        uint256 stake = m.stakeOf[msg.sender][m.result];
-        if (stake == 0) revert NothingToClaim(); // 输家没有可领
-
-        uint256 payout;
         uint256 winnerPool = m.poolOf[m.result];
+        uint256 payout;
+
         if (winnerPool == 0) {
-            // 冷门：没人押中 → 全退（只退自己的本金）
-            payout = stake;
+            // 冷门：没人押中 → 用「本题总投入」全额退款（不能只看赢方，那样人人都为 0）
+            uint256 refund = m.totalStakeOf[msg.sender];
+            if (refund == 0) revert NothingToClaim();
+            payout = refund;
         } else {
+            uint256 stake = m.stakeOf[msg.sender][m.result];
+            if (stake == 0) revert NothingToClaim(); // 输家没有可领
             uint256 distributable = m.totalPool - m.feeCollected;
             payout = (stake * distributable) / winnerPool; // 向下取整，永不多付
         }
@@ -260,10 +264,10 @@ contract PariMutuelMarket {
     function previewPayout(uint256 id, address who) external view returns (uint256) {
         Market storage m = _markets[id];
         if (!m.finalized) return 0;
+        uint256 winnerPool = m.poolOf[m.result];
+        if (winnerPool == 0) return m.totalStakeOf[who]; // 无人押中 → 全额退款
         uint256 stake = m.stakeOf[who][m.result];
         if (stake == 0) return 0;
-        uint256 winnerPool = m.poolOf[m.result];
-        if (winnerPool == 0) return stake;
         return (stake * (m.totalPool - m.feeCollected)) / winnerPool;
     }
 }

@@ -50,10 +50,10 @@ contract PariMutuelMarketTest is Test {
         vm.warp(1_000_000);
         m = new PariMutuelMarket(arbiter, 1 days);
         vm.deal(creator, 100 ether);
-        vm.deal(alice, 100 ether);
-        vm.deal(bob, 100 ether);
-        vm.deal(carol, 100 ether);
-        vm.deal(attacker, 100 ether);
+        vm.deal(alice, 10_000 ether);
+        vm.deal(bob, 10_000 ether);
+        vm.deal(carol, 10_000 ether);
+        vm.deal(attacker, 10_000 ether);
     }
 
     function _newMarket(uint8 outcomes, uint16 fee) internal returns (uint256 id) {

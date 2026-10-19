@@ -1380,7 +1380,7 @@ var OnlineApp = (function () {
         : '<span style="color:var(--text-3)">你没有投注这个问题。</span>';
       var isDraw = q.result === 'draw';
       var winLabel = isDraw ? '公投平局 · 投注全额退还' : OnlineCore.outcomeLabelOf(q, q.result);
-        return '<div class="q-card q-settled">' +
+        return '<div class="q-card q-settled" data-qid="' + esc(q.qid) + '">' +
         '<div class="q-head">' +
         '<span class="q-status settled">已揭晓</span>' +
         '<span class="q-cat">' + esc(catOf(q)) + '</span>' +
@@ -1521,7 +1521,7 @@ var OnlineApp = (function () {
     var votePanelHtml = (zone === 'voting') ? votePanel(q) : '';
     var evidenceRow = evidenceWall(q, settled);
 
-    return '<div class="q-card' + (expired ? ' q-expired' : '') + (zone === 'voting' ? ' q-voting' : '') + '">' + head +
+    return '<div class="q-card' + (expired ? ' q-expired' : '') + (zone === 'voting' ? ' q-voting' : '') + '" data-qid="' + esc(q.qid) + '">' + head +
       '<div class="q-title">' + esc(q.title) + '</div>' +
       (q.descr ? '<div class="q-desc">' + esc(q.descr) + '</div>' : '') +
       outcomes + oddsTrend(q) + betRow + aiInsightRow(q) + votePanelHtml + hostRow + evidenceRow + '</div>';

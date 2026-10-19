@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>链上存证 · 明鉴</title>
+<style>
+  :root{
+    --ink:#1f2329; --muted:#6b7280; --line:#e4e9f0; --bg:#f5f7fb;
+    --navy:#0f172a; --amber:#b45309; --ok:#166534; --bad:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.65}
+  header{background:var(--navy);color:#fff;padding:26px 20px 22px}
+  header .wrap{max-width:760px;margin:0 auto}
+  header h1{margin:0 0 6px;font-size:22px;letter-spacing:.5px}
+  header p{margin:0;color:#9fb0c8;font-size:13px}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+  main{padding:22px 0 60px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+  .card h2{margin:0 0 10px;font-size:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input{flex:1;min-width:200px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px}
+  button{padding:11px 18px;border:0;border-radius:10px;background:var(--amber);color:#fff;font-size:14px;cursor:pointer}
+  button:disabled{opacity:.55;cursor:default}
+  .verdict{display:flex;gap:10px;align-items:flex-start;padding:14px;border-radius:10px;margin-top:14px;font-size:14px}
+  .verdict.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:var(--ok)}
+  .verdict.bad{background:#fef2f2;border:1px solid #fecaca;color:var(--bad)}
+  .verdict.wait{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;font-size:14px;margin-top:6px}
+  .kv .k{color:var(--muted)}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
+  .fold{margin-top:10px}
+  .fold summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .fold pre{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font-size:11.5px}
+  a{color:var(--amber)}
+  .list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .list a{display:flex;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink)}
+  .list a:hover{background:#fafbfd}
+  footer{color:var(--muted);font-size:12.5px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>链上存证</h1>
+    <p>已揭晓的结果被算成 Merkle root 写到链上。任何人都可以在这里独立验证：这题的结果属于某次锚定，且之后没被改过。</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <h2>验证某一题</h2>
+    <div class="row">
+      <input id="qid" placeholder="输入题目编号，例如 bank-77" autocomplete="off">
+      <button id="go">验证</button>
+    </div>
+    <div class="muted" style="margin-top:8px">也可以直接访问 <code>chain.html?qid=bank-77</code></div>
+    <div id="result"></div>
+  </section>
+
+  <section class="card">
+    <h2>这是什么，不是什么</h2>
+    <div class="kv">
+      <div class="k">证明的是</div><div>某个时刻，这批题目（编号+结果+结算时间）的摘要被写进了链上，且该记录之后无法被任何人修改。</div>
+      <div class="k">不证明的是</div><div>结果本身是否正确。结果由站点的查证/公投/仲裁流程产生；链只负责「记录的完整性」。</div>
+      <div class="k">不涉及钱</div><div>合约不托管积分、不接受下注、不发代币。它只是一本公开的、不可篡改的记事本。</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>最近的锚定</h2>
+    <div id="anchors" class="list"><div class="muted">加载中…</div></div>
+  </section>
+
+  <section class="card">
+    <h2>如何自己验证</h2>
+    <div class="muted">
+      叶子：<code>keccak256(abi.encode(qid, result, settledAt))</code>；树：排序对拼接
+      <code>keccak256(min‖max)</code>；奇数节点原样上提。<br>
+      把叶子与 proof 依次折叠，结果应等于该次锚定的 root；也等价于调用合约的
+      <code>verify(anchorId, leaf, proof)</code>。
+    </div>
+    <div id="meta" class="muted" style="margin-top:8px"></div>
+  </section>
+</main>
+
+<footer>明鉴 · 结算存证 · 仅用于完整性证明，不构成任何投资或投注建议</footer>
+
+<script type="module">
+let viem = null;
+try {
+  viem = await import('https://esm.sh/viem@2.21.0');
+} catch (e) {
+  viem = null; // 离线时降级为「只展示存证信息，不本地验证」
+}
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtTime = (ts) => ts ? new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }) : '—';
+
+let DATA = { anchors: [], explorer: 'https://sepolia.basescan.org', registry: null, chainId: null };
+
+async function loadData() {
+  try {
+    const r = await fetch('chain-anchors.json', { cache: 'no-store' });
+    if (r.ok) DATA = await r.json();
+  } catch (e) { /* 忽略 */ }
+  const total = (DATA.anchors || []).reduce((s, a) => s + Object.keys(a.items || {}).length, 0);
+  $('#meta').innerHTML = DATA.registry
+    ? `合约 <code>${esc(DATA.registry)}</code> · chainId ${esc(DATA.chainId)} · 已存证 ${total} 题`
+    : '尚未部署存证合约（worker 还没跑过真实锚定）。';
+
+  const box = $('#anchors');
+  if (!DATA.anchors || !DATA.anchors.length) {
+    box.innerHTML = '<div class="muted">还没有任何锚定记录。等 worker 第一次上链后，这里会列出来。</div>';
+  } else {
+    box.innerHTML = DATA.anchors.slice().reverse().map((a) => `
+      <a href="${esc(DATA.explorer)}/tx/${esc(a.tx)}" target="_blank" rel="noopener">
+        <span>锚定 #${esc(a.id)} · ${Object.keys(a.items || {}).length} 题</span>
+        <span class="muted">${esc(fmtTime(a.fromTs))}</span>
+      </a>`).join('');
+  }
+}
+
+function findAnchor(qid) {
+  for (const a of DATA.anchors || []) {
+    const it = (a.items || {})[qid];
+    if (it) return { anchor: a, item: it };
+  }
+  return null;
+}
+
+function computeHashPair(a, b) {
+  const { keccak256, concat } = viem;
+  return a.toLowerCase() <= b.toLowerCase() ? keccak256(concat([a, b])) : keccak256(concat([b, a]));
+}
+
+function verifyLocal(qid, item, anchor) {
+  const { keccak256, encodeAbiParameters } = viem;
+  const leaf = keccak256(encodeAbiParameters(
+    [{ type: 'string' }, { type: 'string' }, { type: 'uint64' }],
+    [qid, String(item.result), BigInt(item.settledAt)]
+  ));
+  const leafOk = leaf.toLowerCase() === String(item.leaf).toLowerCase();
+
+  let h = leaf;
+  for (const p of item.proof || []) h = computeHashPair(h, p);
+  const rootOk = h.toLowerCase() === String(anchor.root).toLowerCase();
+
+  return { leaf, leafOk, rootOk, ok: leafOk && rootOk };
+}
+
+async function run() {
+  const qid = ($('#qid').value || '').trim();
+  const out = $('#result');
+  if (!qid) { out.innerHTML = '<div class="verdict wait">请输入题目编号</div>'; return; }
+
+  const hit = findAnchor(qid);
+  if (!hit) {
+    out.innerHTML = `<div class="verdict wait">这道题还没有链上存证。可能尚未揭晓，或在下一批锚定里。</div>`;
+    return;
+  }
+
+  const { anchor, item } = hit;
+  const txUrl = `${DATA.explorer}/tx/${anchor.tx}`;
+
+  let verdict;
+  if (!viem) {
+    verdict = `<div class="verdict wait">⚠️ 验证库未加载（可能离线）。你可以直接查看交易记录核对：<a href="${esc(txUrl)}" target="_blank" rel="noopener">${esc(anchor.tx)}</a></div>`;
+  } else {
+    const v = verifyLocal(qid, item, anchor);
+    verdict = v.ok
+      ? `<div class="verdict ok">✅ 已验证：该结果确实包含在锚定 #${esc(anchor.id)} 中，且与链上 root 一致。</div>`
+      : `<div class="verdict bad">❌ 验证失败：本地算出的 root 与链上不一致（叶子或 proof 被改动过）。</div>`;
+  }
+
+  out.innerHTML = `
+    <div class="kv" style="margin-top:14px">
+      <div class="k">题目</div><div>${esc(qid)}</div>
+      <div class="k">结果</div><div><b>${esc(item.result)}</b></div>
+      <div class="k">结算时间</div><div>${esc(fmtTime(item.settledAt))}</div>
+      <div class="k">锚定批次</div><div>#${esc(anchor.id)} · ${Object.keys(anchor.items || {}).length} 题</div>
+      <div class="k">交易</div><div><a class="mono" href="${esc(txUrl)}" target="_blank" rel="noopener">${esc(anchor.tx)}</a></div>
+    </div>
+    ${verdict}
+    <details class="fold">
+      <summary>展开可验证数据（叶子 / proof / root）</summary>
+      <pre>leaf  = ${esc(item.leaf)}
+proof = ${esc(JSON.stringify(item.proof || [], null, 2))}
+root  = ${esc(anchor.root)}</pre>
+    </details>`;
+}
+
+$('#go').addEventListener('click', run);
+$('#qid').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+
+await loadData();
+const preset = new URLSearchParams(location.search).get('qid');
+if (preset) { $('#qid').value = preset; run(); }
+</script>
+</body>
+</html>
