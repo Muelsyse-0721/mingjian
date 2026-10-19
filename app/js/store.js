@@ -120,55 +120,55 @@ var StoreCore = (function () {
     {
       id: 'skin-claude-normal', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 正常号',
       character: 'Claude', variant: 'normal', price: 800,
-      desc: '橘色系桌宠，正常号体型，常驻在页面右下角。纯展示，不影响任何 AI 次数或额度。',
+      desc: '橘发橙花、奶油白蕾丝长裙的管家系少女，正常号体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-claude-normal.png'
     },
     {
       id: 'skin-claude-mini', kind: KINDS.PETSKIN, name: 'Claude 桌宠 · 小号',
       character: 'Claude', variant: 'mini', price: 500,
-      desc: '同款橘色桌宠的小号体型，占地更小。纯展示，不影响任何 AI 次数或额度。',
+      desc: '同款橘发少女的 Q 版小号（大头小身），占地更小。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-claude-mini.png'
     },
     {
       id: 'skin-gpt-normal', kind: KINDS.PETSKIN, name: 'GPT 桌宠 · 正常号',
       character: 'GPT', variant: 'normal', price: 800,
-      desc: '绿色系桌宠，正常号体型，常驻在页面右下角。纯展示，不影响任何 AI 次数或额度。',
+      desc: '银白长发、白蓝羽翼天使命裙，正常号体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-gpt-normal.png'
     },
     {
       id: 'skin-gpt-mini', kind: KINDS.PETSKIN, name: 'GPT 桌宠 · 小号',
       character: 'GPT', variant: 'mini', price: 500,
-      desc: '同款绿色桌宠的小号体型，占地更小。纯展示，不影响任何 AI 次数或额度。',
+      desc: '同款银白天使的 Q 版小号（两头身），占地更小。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-gpt-mini.png'
     },
     {
       id: 'skin-gemini', kind: KINDS.PETSKIN, name: 'Gemini 桌宠',
       character: 'Gemini', variant: 'normal', price: 600,
-      desc: '蓝紫渐变桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      desc: '蓝紫渐变双马尾、星月几何装饰，单款体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-gemini.png'
     },
     {
       id: 'skin-grok', kind: KINDS.PETSKIN, name: 'Grok 桌宠',
       character: 'Grok', variant: 'normal', price: 600,
-      desc: '深灰冷色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      desc: '黑皮衣红瞳、短发的叛逆系少女，单款体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-grok.png'
     },
     {
       id: 'skin-kimi', kind: KINDS.PETSKIN, name: 'Kimi 桌宠',
       character: 'Kimi', variant: 'normal', price: 600,
-      desc: '月白配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      desc: '深蓝长发、月牙发饰与海军蓝女仆裙，单款体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-kimi.png'
     },
     {
       id: 'skin-glm', kind: KINDS.PETSKIN, name: '智谱桌宠',
       character: '智谱', variant: 'normal', price: 600,
-      desc: '青蓝配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      desc: '青绿长辫、书卷气的翡翠色长裙，单款体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-glm.png'
     },
     {
       id: 'skin-qwen', kind: KINDS.PETSKIN, name: '千问桌宠',
       character: '千问', variant: 'normal', price: 600,
-      desc: '靛紫配色桌宠，单款体型。纯展示，不影响任何 AI 次数或额度。',
+      desc: '紫粉渐变长发、几何纹样礼服，单款体型。纯展示，不影响任何 AI 次数或额度。',
       asset: 'assets/pet/skin-qwen.png'
     }
   ]);

@@ -85,7 +85,7 @@
       pet.setAttribute('data-face', 'calm');
       if (persist) writeStore(SKIN_KEY, '');
     };
-    skinImg.src = 'assets/pet/' + sid + '.png';
+    skinImg.src = 'assets/pet/' + sid + '.png?v=2';
     if (skinPick) skinPick.value = sid;
     if (persist) writeStore(SKIN_KEY, sid);
   }
