@@ -403,16 +403,17 @@ var Auth = (function () {
     if (pending && pending.phone && pending.isExistingUser === false) {
       return { allowed: true, state: 'pending-signup', reason: '新号注册可同时设置密码' };
     }
-    if (passwordState === 'set') {
-      return { allowed: false, state: 'set', reason: '本账号已设置密码，可直接用密码登录' };
-    }
     if (isAuthed()) {
+      /* 老账号也能设：/v1/reset 支持手机号 + PASSWORD_RESET 验证码 */
       return {
-        allowed: false, state: 'unknown',
-        reason: '密码只能在新号注册时设置，老账号无法补设；请继续用验证码登录'
+        allowed: true,
+        state: passwordState === 'set' ? 'set' : 'unknown',
+        reason: passwordState === 'set'
+          ? '已设置密码；忘记密码可用短信验证重置'
+          : '可通过短信验证设置或重置密码（老账号同样适用）'
       };
     }
-    return { allowed: false, state: 'anonymous', reason: '请先验证手机号；新号注册时可设置密码' };
+    return { allowed: false, state: 'anonymous', reason: '请先登录，再用短信验证设置密码' };
   }
 
   /* ---------- 登出 ---------- */
@@ -432,13 +433,93 @@ var Auth = (function () {
     });
   }
 
+  /* ---------- 短信验证设 / 重置密码（老账号与忘记密码走同一条路） ----------
+   * 依据：SDK 的 /v1/reset 接受 phone_number（E.164：+86 13800138000），
+   * 流程：/v1/verification(usage=PASSWORD_RESET) → verification_id
+   *      → /v1/verification/verify 取 verification_token
+   *      → /v1/reset {phone_number, new_password, verification_token}
+   */
+  function toE164(phone) {
+    var d = String(phone || '').replace(/\D/g, '');
+    return d ? '+86 ' + d : '';
+  }
+
+  function resetErr(r) {
+    var e = (r && r.error) || {};
+    var msg = String(e.message || '');
+    if (e.status === 429 || /rate|frequent/i.test(msg)) return '操作过于频繁，请稍后再试';
+    if (/verification|code/i.test(msg) || e.status === 400) return '验证码不正确或已过期';
+    if (e.status === 404) return '该手机号尚未注册，或验证已失效';
+    return msg || '操作失败，请稍后重试';
+  }
+
+  function sendResetCode(phone) {
+    phone = typeof phone === 'string' ? phone.replace(/\s/g, '') : '';
+    if (!PHONE_RE.test(phone)) {
+      return Promise.resolve({ ok: false, error: { message: '请输入正确的 11 位手机号' } });
+    }
+    if (!cloud || !cloud.auth || typeof cloud.auth.request !== 'function') {
+      return Promise.resolve({ ok: false, error: { message: '当前环境不支持该操作，请用验证码登录' } });
+    }
+    return Promise.resolve(cloud.auth.request('/v1/verification', {
+      method: 'POST',
+      body: { phone_number: toE164(phone), usage: 'PASSWORD_RESET', target: 'USER' }
+    })).then(function (r) {
+      if (!r || r.error) return { ok: false, error: { message: resetErr(r) } };
+      var vid = r.data && r.data.verification_id;
+      if (!vid) return { ok: false, error: { message: '服务端未返回验证标识，请重试' } };
+      return { ok: true, verificationId: String(vid) };
+    }).catch(function (e) {
+      return { ok: false, error: { message: resetErr({ error: { message: e && e.message } }) } };
+    });
+  }
+
+  function resetPasswordWithPhone(phone, code, newPassword, verificationId) {
+    phone = typeof phone === 'string' ? phone.replace(/\s/g, '') : '';
+    if (!PHONE_RE.test(phone)) {
+      return Promise.resolve({ ok: false, error: { message: '请输入正确的 11 位手机号' } });
+    }
+    if (!code) return Promise.resolve({ ok: false, error: { message: '请输入短信验证码' } });
+    if (!verificationId) return Promise.resolve({ ok: false, error: { message: '请先获取验证码' } });
+    if (!newPassword || String(newPassword).length < 6) {
+      return Promise.resolve({ ok: false, error: { message: '新密码至少 6 位' } });
+    }
+    if (!cloud || !cloud.auth || typeof cloud.auth.request !== 'function') {
+      return Promise.resolve({ ok: false, error: { message: '当前环境不支持该操作' } });
+    }
+    return Promise.resolve(cloud.auth.request('/v1/verification/verify', {
+      method: 'POST',
+      body: { verification_id: String(verificationId), verification_code: String(code) }
+    })).then(function (r) {
+      if (!r || r.error) return { ok: false, error: { message: resetErr(r) } };
+      var token = r.data && r.data.verification_token;
+      if (!token) return { ok: false, error: { message: '验证码校验失败，请重新获取' } };
+      return Promise.resolve(cloud.auth.request('/v1/reset', {
+        method: 'POST',
+        body: {
+          phone_number: toE164(phone),
+          new_password: String(newPassword),
+          verification_token: String(token)
+        }
+      })).then(function (r2) {
+        if (!r2 || r2.error) return { ok: false, error: { message: resetErr(r2) } };
+        passwordState = 'set';
+        return { ok: true };
+      });
+    }).catch(function (e) {
+      return { ok: false, error: { message: resetErr({ error: { message: e && e.message } }) } };
+    });
+  }
+
   return {
     init: init, isAuthed: isAuthed, getUid: getUid, getNickname: getNickname,
     getPending: getPending, onChange: onChange, sendCode: sendCode, verify: verify,
     ensureNickname: ensureNickname, loadServerNickname: loadServerNickname,
     migrateOldUid: migrateOldUid, signOut: signOut,
     signInWithPassword: signInWithPassword, signUpWithPassword: signUpWithPassword,
-    canSetPassword: canSetPassword
+    canSetPassword: canSetPassword,
+    sendResetCode: sendResetCode, resetPasswordWithPhone: resetPasswordWithPhone,
+    toE164: toE164
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Auth;

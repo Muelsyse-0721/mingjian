@@ -240,7 +240,21 @@
     <div class="field" id="login-pw-field" style="display:none" data-page-node-id="lpwfield">
       <label data-page-node-id="lpwlabel">密码</label>
       <input type="password" id="login-pw" maxlength="64" placeholder="注册时设置的密码" data-page-node-id="lpwinput">
-      <p class="hint">密码只能在新号注册时设置；老账号请用验证码登录。</p>
+      <p class="hint" data-page-node-id="lpwhint">老账号或忘记密码？<a href="#" id="link-reset" data-page-node-id="linkreset">用短信验证设置 / 重置密码</a></p>
+    </div>
+    <div class="field" id="reset-block" style="display:none" data-page-node-id="resetblock">
+      <label data-page-node-id="resetlabel">设置 / 重置登录密码（短信验证）</label>
+      <div style="display:flex;gap:8px" data-page-node-id="resetcoderow">
+        <input type="text" id="reset-code" maxlength="6" placeholder="短信验证码" inputmode="numeric" style="flex:1" data-page-node-id="resetcode">
+        <button class="btn" type="button" id="btn-reset-code" style="width:auto" data-page-node-id="btnresetcode">获取验证码</button>
+      </div>
+      <input type="password" id="reset-pw" maxlength="64" placeholder="新密码（至少 6 位，字母+数字）" style="margin-top:8px" data-page-node-id="resetpw">
+      <input type="password" id="reset-pw2" maxlength="64" placeholder="再输一次新密码" style="margin-top:8px" data-page-node-id="resetpw2">
+      <div style="display:flex;gap:8px;margin-top:8px" data-page-node-id="resetacts">
+        <button class="btn btn-primary" type="button" id="btn-reset-submit" style="width:auto" data-page-node-id="btnresetsubmit">确认设置</button>
+        <button class="btn" type="button" id="btn-reset-cancel" style="width:auto" data-page-node-id="btnresetcancel">取消</button>
+      </div>
+      <p class="hint" data-page-node-id="resettip">验证码发到上面的手机号；设置成功后即可用「密码登录」。老账号与忘记密码都走这里。</p>
     </div>
     <div class="modal-actions" data-page-node-id="AloYnfPkxY0Kp0km1Ia1Cv">
       <button class="btn btn-primary" id="btn-login" style="width:auto" data-page-node-id="Ps0jHU6BMd2CwDGidVDEUi">登录 / 注册</button>

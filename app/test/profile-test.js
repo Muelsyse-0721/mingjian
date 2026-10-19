@@ -144,7 +144,7 @@ console.log('\n[composePasswordHint]');
 ok('已设密码文案提到密码登录', /密码.*登录/.test(P.composePasswordHint(true)));
 eq('已设密码文案不出现「无法补设」', /无法补设/.test(P.composePasswordHint(true)), false);
 ok('未设密码文案提到验证码', /验证码/.test(P.composePasswordHint(false)));
-ok('未设密码文案如实说明老账号无法补设', /老账号无法补设/.test(P.composePasswordHint(false)));
+ok('未设密码文案说明可用短信验证补设', /短信验证/.test(P.composePasswordHint(false)) && /设置/.test(P.composePasswordHint(false)));
 eq('undefined 按未设密码处理', P.composePasswordHint(undefined), P.composePasswordHint(false));
 
 /* ============================================================
@@ -213,7 +213,7 @@ function authSection() {
       eq('登录后建立会话', Auth.isAuthed(), true);
       eq('SDK 收到 phone 参数', a._calls.signIn[0].phone, '13800138000');
       eq('SDK 未收到 username 参数', a._calls.signIn[0].username, undefined);
-      eq('已设密码账号 canSetPassword 为 false', Auth.canSetPassword().allowed, false);
+      eq('已设密码账号也可重置（allowed=true）', Auth.canSetPassword().allowed, true);
       eq('已设密码账号状态为 set', Auth.canSetPassword().state, 'set');
     });
   });
@@ -267,8 +267,8 @@ function authSection() {
       eq('老号 passwordSet 为 false', r.passwordSet, false);
       eq('老号回退原因 exists', r.reason, 'exists');
       eq('老号回退不提交密码', a._calls.verifyOtp[0].password, undefined);
-      eq('老号 canSetPassword 为 false', Auth.canSetPassword().allowed, false);
-      ok('老号提示文案说明无法补设', /无法补设/.test(Auth.canSetPassword().reason));
+      eq('老号也可用短信验证设密码', Auth.canSetPassword().allowed, true);
+      ok('老号提示文案说明可短信重置', /短信验证/.test(Auth.canSetPassword().reason));
     });
   });
 

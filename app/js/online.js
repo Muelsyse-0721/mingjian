@@ -1793,7 +1793,8 @@ var OnlineApp = (function () {
     return '<div class="card"><div class="card-title">个人中心</div>' +
       '<div class="bet-row"><span>名号：<b>' + esc(state.nickname || '未设置') + '</b></span>' +
       (phone ? '<span>手机：' + esc(ProfileCore.maskPhone(phone)) + '</span>' : '') +
-      '<span>身份：' + (state.isAdmin ? '站长' : '普通用户') + '</span></div>' +
+      '<span>身份：' + (state.isAdmin ? '站长' : '普通用户') + '</span>' +
+      '<button class="btn-link" id="btn-profile-reset">设置 / 重置登录密码</button></div>' +
       '<div class="ai-note">' + esc(hint) + '</div></div>';
   }
 
@@ -1815,6 +1816,12 @@ var OnlineApp = (function () {
         '<div class="stat-card"><div class="stat-label">当前负债</div><div class="stat-value" style="color:' + (sum.debt > 0 ? 'var(--green)' : 'inherit') + '">' + (sum.debt ? sum.debt + ' 分' : '无') + '</div></div>' +
         '</div>';
     }
+
+    var prBtn = $('btn-profile-reset');
+    if (prBtn) prBtn.addEventListener('click', function () {
+      openLoginModal();
+      setTimeout(function () { var l = $('link-reset'); if (l) l.click(); }, 40);
+    });
 
     renderLoanCard(sum);
     renderSeasonCard();
@@ -4200,6 +4207,59 @@ var OnlineApp = (function () {
     if (tabPw) tabPw.addEventListener('click', function () { switchMode('pw'); });
     var pwBtn = $('btn-pw-login');
     if (pwBtn) pwBtn.addEventListener('click', onPasswordLogin);
+
+    /* ---- 短信验证设 / 重置密码（老账号与忘记密码同一入口） ---- */
+    var resetId = '';
+    var resetBlock = $('reset-block');
+    function showReset(on) {
+      if (resetBlock) resetBlock.style.display = on ? '' : 'none';
+      var pwf = $('login-pw-field');
+      if (pwf) pwf.style.display = on ? 'none' : '';
+      var lb = $('btn-login');
+      if (lb) lb.style.display = on ? 'none' : '';
+    }
+    var linkReset = $('link-reset');
+    if (linkReset) linkReset.addEventListener('click', function (e) {
+      e.preventDefault();
+      switchMode('pw');
+      showReset(true);
+    });
+    var btnResetCode = $('btn-reset-code');
+    if (btnResetCode) btnResetCode.addEventListener('click', function () {
+      var le = $('login-err'); if (le) le.textContent = '';
+      var phone = (($('login-phone') || {}).value || '').trim();
+      if (!/^1\d{10}$/.test(phone)) { if (le) le.textContent = '请输入正确的 11 位手机号'; return; }
+      if (!AuthModule.sendResetCode) { if (le) le.textContent = '当前版本不支持，请用验证码登录'; return; }
+      btnResetCode.disabled = true;
+      AuthModule.sendResetCode(phone).then(function (r) {
+        btnResetCode.disabled = false;
+        if (!r || !r.ok) { if (le) le.textContent = (r && r.error && r.error.message) || '发送失败'; return; }
+        resetId = r.verificationId;
+        if (le) le.textContent = '验证码已发送，请查收';
+      });
+    });
+    var btnResetSubmit = $('btn-reset-submit');
+    if (btnResetSubmit) btnResetSubmit.addEventListener('click', function () {
+      var le = $('login-err'); if (le) le.textContent = '';
+      var phone = (($('login-phone') || {}).value || '').trim();
+      var code = ($('reset-code') || {}).value || '';
+      var pw1 = ($('reset-pw') || {}).value || '';
+      var pw2 = ($('reset-pw2') || {}).value || '';
+      if (!code) { if (le) le.textContent = '请输入短信验证码'; return; }
+      if (pw1.length < 6) { if (le) le.textContent = '新密码至少 6 位'; return; }
+      if (pw1 !== pw2) { if (le) le.textContent = '两次输入的密码不一致'; return; }
+      if (!AuthModule.resetPasswordWithPhone) { if (le) le.textContent = '当前版本不支持'; return; }
+      btnResetSubmit.disabled = true;
+      AuthModule.resetPasswordWithPhone(phone, code, pw1, resetId).then(function (r) {
+        btnResetSubmit.disabled = false;
+        if (!r || !r.ok) { if (le) le.textContent = (r && r.error && r.error.message) || '设置失败'; return; }
+        var pwl = $('login-pw'); if (pwl) pwl.value = pw1;
+        if (le) le.textContent = '密码已设置，现在可以直接用密码登录';
+        showReset(false);
+      });
+    });
+    var btnResetCancel = $('btn-reset-cancel');
+    if (btnResetCancel) btnResetCancel.addEventListener('click', function () { showReset(false); });
   }
 
   function onPasswordLogin() {
