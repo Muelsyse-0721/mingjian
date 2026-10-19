@@ -90,6 +90,10 @@
 <footer>明鉴 · 结算存证 · 仅用于完整性证明，不构成任何投资或投注建议</footer>
 
 <script type="module">
+const API = 'https://jp-ladder.app.workbuddy.host/.cloud/database/rest';
+const KEY = 'wbpk_7bwzvH0HlWEBuvX8C9eOlY_xHSFWuFjacpSFqcnHCge7bIWmWm2a4bK';
+const HDR = { 'x-wb-webapp-access-key': KEY };
+
 let viem = null;
 try {
   viem = await import('https://esm.sh/viem@2.21.0');
@@ -99,33 +103,54 @@ try {
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const fmtTime = (ts) => ts ? new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }) : '—';
+const fmtTime = (ts) => ts ? new Date(Number(ts) * 1000).toLocaleString('zh-CN', { hour12: false }) : '—';
 
-let DATA = { anchors: [], explorer: 'https://sepolia.basescan.org', registry: null, chainId: null };
+let DATA = { anchors: [], explorer: 'https://sepolia.basescan.org', registry: null, chainId: null, source: '' };
 
-async function loadData() {
+/* 云端优先；失败再退回静态 chain-anchors.json（离线/未迁移时） */
+async function loadAnchors() {
+  try {
+    const r = await fetch(API + '/jp_chain_anchors?select=id,tx_hash,root,item_count,from_ts,to_ts,chain_id,registry,explorer&order=id.desc&limit=50', { headers: HDR });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const rows = await r.json();
+    DATA.anchors = rows.map((a) => ({
+      id: a.id, tx: a.tx_hash, root: a.root, count: a.item_count,
+      fromTs: Number(a.from_ts), toTs: Number(a.to_ts), items: {}
+    }));
+    if (rows[0]) { DATA.registry = rows[0].registry; DATA.chainId = rows[0].chain_id; DATA.explorer = rows[0].explorer || DATA.explorer; }
+    DATA.source = 'cloud';
+    return;
+  } catch (e) { /* 退回静态 */ }
+
   try {
     const r = await fetch('chain-anchors.json', { cache: 'no-store' });
-    if (r.ok) DATA = await r.json();
+    if (r.ok) {
+      const j = await r.json();
+      DATA = Object.assign(DATA, j, { source: 'static' });
+    }
   } catch (e) { /* 忽略 */ }
-  const total = (DATA.anchors || []).reduce((s, a) => s + Object.keys(a.items || {}).length, 0);
-  $('#meta').innerHTML = DATA.registry
-    ? `合约 <code>${esc(DATA.registry)}</code> · chainId ${esc(DATA.chainId)} · 已存证 ${total} 题`
-    : '尚未部署存证合约（worker 还没跑过真实锚定）。';
-
-  const box = $('#anchors');
-  if (!DATA.anchors || !DATA.anchors.length) {
-    box.innerHTML = '<div class="muted">还没有任何锚定记录。等 worker 第一次上链后，这里会列出来。</div>';
-  } else {
-    box.innerHTML = DATA.anchors.slice().reverse().map((a) => `
-      <a href="${esc(DATA.explorer)}/tx/${esc(a.tx)}" target="_blank" rel="noopener">
-        <span>锚定 #${esc(a.id)} · ${Object.keys(a.items || {}).length} 题</span>
-        <span class="muted">${esc(fmtTime(a.fromTs))}</span>
-      </a>`).join('');
-  }
 }
 
-function findAnchor(qid) {
+/* 单题查询：云端优先，静态兜底 */
+async function lookup(qid) {
+  try {
+    const r = await fetch(API + '/jp_chain_anchor_items?select=qid,anchor_id,tx_hash,result,settled_at,leaf,proof&qid=eq.' + encodeURIComponent(qid), { headers: HDR });
+    if (r.ok) {
+      const rows = await r.json();
+      if (rows.length) {
+        const it = rows[0];
+        const ra = await fetch(API + '/jp_chain_anchors?select=id,tx_hash,root,item_count&id=eq.' + it.anchor_id, { headers: HDR });
+        const arows = ra.ok ? await ra.json() : [];
+        const a = arows[0] || { id: it.anchor_id, tx_hash: it.tx_hash, root: '', item_count: 0 };
+        return {
+          anchor: { id: a.id, tx: a.tx_hash, root: a.root, count: a.item_count },
+          item: { result: it.result, settledAt: Number(it.settled_at), leaf: it.leaf, proof: it.proof || [] }
+        };
+      }
+      return null; // 云端明确没有
+    }
+  } catch (e) { /* 退回静态 */ }
+
   for (const a of DATA.anchors || []) {
     const it = (a.items || {})[qid];
     if (it) return { anchor: a, item: it };
@@ -133,7 +158,7 @@ function findAnchor(qid) {
   return null;
 }
 
-function computeHashPair(a, b) {
+function hashPair(a, b) {
   const { keccak256, concat } = viem;
   return a.toLowerCase() <= b.toLowerCase() ? keccak256(concat([a, b])) : keccak256(concat([b, a]));
 }
@@ -145,11 +170,9 @@ function verifyLocal(qid, item, anchor) {
     [qid, String(item.result), BigInt(item.settledAt)]
   ));
   const leafOk = leaf.toLowerCase() === String(item.leaf).toLowerCase();
-
   let h = leaf;
-  for (const p of item.proof || []) h = computeHashPair(h, p);
+  for (const p of item.proof || []) h = hashPair(h, p);
   const rootOk = h.toLowerCase() === String(anchor.root).toLowerCase();
-
   return { leaf, leafOk, rootOk, ok: leafOk && rootOk };
 }
 
@@ -158,9 +181,10 @@ async function run() {
   const out = $('#result');
   if (!qid) { out.innerHTML = '<div class="verdict wait">请输入题目编号</div>'; return; }
 
-  const hit = findAnchor(qid);
+  out.innerHTML = '<div class="verdict wait">查询中…</div>';
+  const hit = await lookup(qid);
   if (!hit) {
-    out.innerHTML = `<div class="verdict wait">这道题还没有链上存证。可能尚未揭晓，或在下一批锚定里。</div>`;
+    out.innerHTML = '<div class="verdict wait">这道题还没有链上存证。可能尚未揭晓，或在下一批锚定里。</div>';
     return;
   }
 
@@ -170,6 +194,8 @@ async function run() {
   let verdict;
   if (!viem) {
     verdict = `<div class="verdict wait">⚠️ 验证库未加载（可能离线）。你可以直接查看交易记录核对：<a href="${esc(txUrl)}" target="_blank" rel="noopener">${esc(anchor.tx)}</a></div>`;
+  } else if (!anchor.root) {
+    verdict = '<div class="verdict wait">已查到存证条目，但没取到该批次的 root（批次元数据缺失）。</div>';
   } else {
     const v = verifyLocal(qid, item, anchor);
     verdict = v.ok
@@ -182,8 +208,9 @@ async function run() {
       <div class="k">题目</div><div>${esc(qid)}</div>
       <div class="k">结果</div><div><b>${esc(item.result)}</b></div>
       <div class="k">结算时间</div><div>${esc(fmtTime(item.settledAt))}</div>
-      <div class="k">锚定批次</div><div>#${esc(anchor.id)} · ${Object.keys(anchor.items || {}).length} 题</div>
+      <div class="k">锚定批次</div><div>#${esc(anchor.id)} · ${esc(anchor.count || '?')} 题</div>
       <div class="k">交易</div><div><a class="mono" href="${esc(txUrl)}" target="_blank" rel="noopener">${esc(anchor.tx)}</a></div>
+      <div class="k">数据来源</div><div>${DATA.source === 'cloud' ? '云端表（实时）' : '静态文件（兜底）'}</div>
     </div>
     ${verdict}
     <details class="fold">
@@ -194,10 +221,30 @@ root  = ${esc(anchor.root)}</pre>
     </details>`;
 }
 
+function renderList() {
+  const box = $('#anchors');
+  const list = DATA.anchors || [];
+  if (!list.length) {
+    box.innerHTML = '<div class="muted">还没有任何锚定记录。等 worker 第一次上链后，这里会列出来。</div>';
+    return;
+  }
+  box.innerHTML = list.map((a) => `
+    <a href="${esc(DATA.explorer)}/tx/${esc(a.tx)}" target="_blank" rel="noopener">
+      <span>锚定 #${esc(a.id)} · ${esc(a.count || a.item_count || '?')} 题</span>
+      <span class="muted">${esc(fmtTime(a.fromTs))}</span>
+    </a>`).join('');
+}
+
 $('#go').addEventListener('click', run);
 $('#qid').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 
-await loadData();
+await loadAnchors();
+renderList();
+const total = (DATA.anchors || []).reduce((s, a) => s + Number(a.count || 0), 0);
+$('#meta').innerHTML = DATA.registry
+  ? `合约 <code>${esc(DATA.registry)}</code> · chainId ${esc(DATA.chainId)} · 已存证 ${total} 题（${DATA.source === 'cloud' ? '云端实时' : '静态兜底'}）`
+  : '尚未部署存证合约（worker 还没跑过真实锚定）。';
+
 const preset = new URLSearchParams(location.search).get('qid');
 if (preset) { $('#qid').value = preset; run(); }
 </script>

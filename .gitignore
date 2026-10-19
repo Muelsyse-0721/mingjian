@@ -28,3 +28,4 @@ tools/data/*.json
 tools/data/*.lock
 tools/CosyVoice/
 tools/cv-venv/
+tools/data/anchor-secret.txt

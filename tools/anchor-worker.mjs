@@ -64,6 +64,13 @@ const OUT_PATH = path.join(ROOT, 'app', 'chain-anchors.json');
 
 const DRY = process.argv.includes('--dry-run') || !CFG.pk || !CFG.registry || !CFG.rpc;
 
+/* 云端推送密钥：优先 env PUSH_TOKEN，其次 tools/data/anchor-secret.txt */
+function loadPushToken() {
+  if (process.env.PUSH_TOKEN) return process.env.PUSH_TOKEN.trim();
+  try { return fs.readFileSync(path.join(__dirname, 'data', 'anchor-secret.txt'), 'utf8').trim(); } catch (e) { return ''; }
+}
+const PUSH_TOKEN = loadPushToken();
+
 const ABI = [
   {
     type: 'function', name: 'anchor', stateMutability: 'nonpayable',
@@ -319,10 +326,46 @@ async function main() {
     });
     saveState(state);
 
+    await pushAnchor(anchorId, batch, items);
+
     writePublicJson(state);
     log(`完成：anchorId=${anchorId} tx=${CFG.explorer}/tx/${txHash}`);
   } finally {
     releaseLock();
+  }
+}
+
+/* 把锚定结果推到云端表（站点从此不需要重新部署） */
+async function pushAnchor(anchorId, batch, items) {
+  if (!PUSH_TOKEN) { log('未配置 PUSH_TOKEN，跳过云端推送（只在本地）'); return; }
+  const payload = {
+    id: anchorId,
+    tx: batch.txHash,
+    blockNumber: batch.blockNumber,
+    root: batch.root,
+    count: batch.count,
+    fromTs: batch.fromTs,
+    toTs: batch.toTs,
+    chainId: CFG.chainId,
+    registry: CFG.registry,
+    explorer: CFG.explorer,
+    items: items.reduce((acc, it) => {
+      acc[it.qid] = { result: it.result, settledAt: it.settledAt, leaf: it.leaf, proof: it.proof };
+      return acc;
+    }, {})
+  };
+  try {
+    const res = await fetch(CFG.base + '/.cloud/database/rest/rpc/chain_anchor_push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-wb-webapp-access-key': CFG.accessKey },
+      body: JSON.stringify({ p_token: PUSH_TOKEN, p_payload: payload })
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text);
+    log('已推送云端：' + text);
+  } catch (e) {
+    // 推送失败不影响链上事实，本地 state 仍是权威，下次可重跑
+    log('⚠️ 云端推送失败（链上已成功，可稍后重跑）：' + (e.message || e));
   }
 }
 

@@ -22,17 +22,32 @@
     document.head.appendChild(st);
   }
 
+  var API = 'https://jp-ladder.app.workbuddy.host/.cloud/database/rest';
+  var KEY = 'wbpk_7bwzvH0HlWEBuvX8C9eOlY_xHSFWuFjacpSFqcnHCge7bIWmWm2a4bK';
+
+  /* 云端优先（锚定后即时可见，无需重新部署）；失败退回静态文件 */
   function load() {
     if (MAP) return Promise.resolve(MAP);
+    return fetch(API + '/jp_chain_anchor_items?select=qid,anchor_id&limit=20000', {
+      headers: { 'x-wb-webapp-access-key': KEY }
+    })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (rows) {
+        MAP = {};
+        (rows || []).forEach(function (r) { if (r.qid) MAP[r.qid] = { id: r.anchor_id }; });
+        return MAP;
+      })
+      .catch(function () { return loadStatic(); });
+  }
+
+  function loadStatic() {
     return fetch('chain-anchors.json', { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         MAP = {};
         ((j && j.anchors) || []).forEach(function (a) {
           var items = a.items || {};
-          Object.keys(items).forEach(function (qid) {
-            MAP[qid] = { id: a.id, tx: a.tx };
-          });
+          Object.keys(items).forEach(function (qid) { MAP[qid] = { id: a.id, tx: a.tx }; });
         });
         return MAP;
       })
