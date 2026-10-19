@@ -8,7 +8,15 @@
  */
 
 const path = require('node:path');
+const fs = require('node:fs');
 const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen } = require('electron');
+
+/* 窗口显示诊断（透明窗口在部分 macOS 版本上 ready-to-show 不触发） */
+function logWindow(msg) {
+  try {
+    fs.appendFileSync('/tmp/pet-window.log', new Date().toISOString() + ' ' + msg + '\n');
+  } catch (e) { /* ignore */ }
+}
 
 // 真实的宠物页：../app/pet.html（相对 pet.html 的资源 assets/*.png 会正常解析）
 const PET_PAGE = path.join(__dirname, '..', 'app', 'pet.html');
@@ -75,11 +83,31 @@ function createWindow() {
 
   win.loadFile(PET_PAGE);
 
+  /* 兜底：透明窗口下 ready-to-show 可能不触发，did-finish-load 与定时器双重保障 */
+  const reveal = (why) => {
+    if (!win || win.isDestroyed()) return;
+    try {
+      if (!win.isVisible()) win.showInactive();
+      win.setAlwaysOnTop(true, 'screen-saver');
+      logWindow('shown via ' + why + ' visible=' + win.isVisible());
+    } catch (e) {
+      logWindow('reveal error: ' + e.message);
+    }
+  };
+
   win.once('ready-to-show', () => {
-    win.showInactive(); // 不抢当前应用焦点
+    reveal('ready-to-show');
+  });
+
+  setTimeout(() => reveal('fallback-1200ms'), 1200);
+  setTimeout(() => reveal('fallback-3000ms'), 3000);
+
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    logWindow('did-fail-load ' + code + ' ' + desc + ' ' + url);
   });
 
   win.webContents.on('did-finish-load', async () => {
+    reveal('did-finish-load');
     if (compactCssKey) {
       await win.webContents.removeInsertedCSS(compactCssKey).catch(() => {});
       compactCssKey = null;
@@ -143,6 +171,31 @@ app.whenReady().then(() => {
   registerIpc();
   registerShortcuts();
   createWindow();
+});
+
+/* 单实例：再次双击时唤回已存在的窗口，而不是什么都不发生 */
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    logWindow('second-instance');
+    if (win && !win.isDestroyed()) {
+      win.showInactive();
+      win.setAlwaysOnTop(true, 'screen-saver');
+    }
+  });
+}
+
+/* macOS：再次双击 App / 从 Finder 激活时，把隐藏的窗口唤回来 */
+app.on('activate', () => {
+  logWindow('activate');
+  if (win && !win.isDestroyed()) {
+    win.showInactive();
+    win.setAlwaysOnTop(true, 'screen-saver');
+  } else {
+    createWindow();
+  }
 });
 
 // 窗口关了就直接退出（本应用只有一个窗口，且没有 Dock 图标可点回来）

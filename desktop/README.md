@@ -196,3 +196,15 @@ const PET_PAGE = path.join(__dirname, '..', 'app', 'pet.html');
 - DeepSeek：填 `sk-...`，直连 `api.deepseek.com`（`deepseek-chat`）
 - WorkBuddy：填 `endpoint|publishableKey`
 - 不填则用内置脚本问答
+
+
+## 双击没反应？排查顺序（2026-10-19）
+
+1. **确认是真实副本不是符号链接**：桌面的 `明鉴桌宠.app` 必须是实体（`ls -ld` 显示 `drwxr`，不是 `lrwxr`）。
+   符号链接指向 .app 时 Finder 经常不启动。
+2. **看进程**：`ps aux | grep "键政游戏/desktop"`。有进程但没窗口 = 窗口没显示；
+   新版已在 `ready-to-show / did-finish-load / 1.2s / 3s` 四重兜底里强制 `showInactive()`，
+   并写日志到 `/tmp/pet-window.log`（`shown via ... visible=true` 即成功）。
+3. **窗口被隐藏**：鼠标双击桌宠会隐藏；再双击 App（`activate`）或按 `Ctrl+Shift+F` 唤回。
+4. **退出**：`Ctrl+Shift+Q`，或在桌宠上右键 → 退出。
+5. 若日志显示 `did-fail-load`，说明页面没加载成功，检查 `app/pet.html` 是否被移动。
