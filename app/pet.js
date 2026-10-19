@@ -64,6 +64,21 @@
   }
   refreshFollowBtn();
 
+  /* 桌面版：右键菜单换装 / 跟随开关 */
+  if (window.desktopPet) {
+    if (window.desktopPet.onApplySkin) {
+      window.desktopPet.onApplySkin(function (id) { applySkin(id, true); });
+    }
+    if (window.desktopPet.onSetFollow) {
+      window.desktopPet.onSetFollow(function (on) {
+        followOn = !!on;
+        writeStore(FOLLOW_KEY, followOn ? '1' : '0');
+        if (!followOn && reactEl) reactEl.style.transform = '';
+        refreshFollowBtn();
+      });
+    }
+  }
+
   document.addEventListener('mousemove', function (e) {
     if (!followOn) return;
     var r = pet.getBoundingClientRect();
@@ -157,7 +172,10 @@
 
   function normalizeSkin(id) {
     if (!id) return '';
-    return SKIN_IDS.indexOf(id) >= 0 ? id : '';
+    if (SKIN_IDS.indexOf(id) >= 0) return id;
+    /* 本地皮肤：仅个人使用，不随站点发布（app/assets/pet/local 已 gitignore） */
+    if (/^local-(muelsyse|claude-chan)$/.test(id)) return id;
+    return '';
   }
 
   function applySkin(id, persist) {
@@ -175,6 +193,7 @@
     pet.classList.add('has-skin');
     skinImg.style.display = 'block';
     skinImg.onerror = function () {
+      console.log('skin-error ' + sid);
       // 找不到皮肤图 → 回退到 5 张表情图（默认 face-calm）
       skinImg.onerror = null;
       pet.classList.remove('has-skin');
@@ -183,7 +202,10 @@
       pet.setAttribute('data-face', 'calm');
       if (persist) writeStore(SKIN_KEY, '');
     };
-    skinImg.src = 'assets/pet/' + sid + '.png?v=3';
+    console.log("skin-apply " + sid);
+    skinImg.src = sid.indexOf('local-') === 0
+      ? 'assets/pet/local/' + sid.slice(6) + '.png'
+      : 'assets/pet/' + sid + '.png?v=3';
     if (skinPick) skinPick.value = sid;
     if (persist) writeStore(SKIN_KEY, sid);
   }

@@ -11,7 +11,34 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen } = require('electron');
 
-/* 窗口显示诊断（透明窗口在部分 macOS 版本上 ready-to-show 不触发） */
+/* 桌宠皮肤清单（与 app/assets/pet 下文件对应） */
+const SKINS = [
+  { id: 'skin-claude-normal', name: 'Claude · 正常（Q版）' },
+  { id: 'skin-claude-medium', name: 'Claude · 中号' },
+  { id: 'skin-claude-mini', name: 'Claude · 小号' },
+  { id: 'skin-gpt-normal', name: 'GPT · 正常' },
+  { id: 'skin-gpt-mini', name: 'GPT · 小号' },
+  { id: 'skin-gemini', name: 'Gemini' },
+  { id: 'skin-grok', name: 'Grok' },
+  { id: 'skin-kimi', name: 'Kimi' },
+  { id: 'skin-glm', name: '智谱' },
+  { id: 'skin-qwen', name: '千问' },
+  { id: '', name: '大肥鱼（默认）' },
+  { id: 'local-claude-chan', name: 'Claude 像素（本地）' },
+  { id: 'local-muelsyse', name: '缪尔赛思（本地）' }
+];
+
+function prefsPath() {
+  return path.join(app.getPath('userData'), 'pet-prefs.json');
+}
+function loadPrefs() {
+  try { return JSON.parse(fs.readFileSync(prefsPath(), 'utf8')) || {}; } catch (e) { return {}; }
+}
+function savePrefs(patch) {
+  const p = Object.assign(loadPrefs(), patch || {});
+  try { fs.writeFileSync(prefsPath(), JSON.stringify(p, null, 2)); } catch (e) {}
+  return p;
+}
 function logWindow(msg) {
   try {
     fs.appendFileSync('/tmp/pet-window.log', new Date().toISOString() + ' ' + msg + '\n');
@@ -118,12 +145,47 @@ function createWindow() {
   });
 
   // 无边框窗口没有关闭按钮，右键菜单兜底
+  win.webContents.on('console-message', (_e, level, message) => {
+    if (/skin|pet/i.test(String(message))) logWindow('renderer: ' + message);
+  });
+
   win.webContents.on('context-menu', () => {
+    const prefs = loadPrefs();
+    const current = typeof prefs.skin === 'string' ? prefs.skin : '';
+    const follow = prefs.follow !== false;
     Menu.buildFromTemplate([
-      { label: '显示 / 隐藏', accelerator: TOGGLE_ACCELERATOR, click: toggleWindow },
+      {
+        label: '换装',
+        submenu: SKINS.map((s) => ({
+          label: s.name,
+          type: 'radio',
+          checked: s.id === current,
+          click: () => {
+            savePrefs({ skin: s.id });
+            win.webContents.send('pet:apply-skin', s.id);
+          }
+        }))
+      },
+      {
+        label: '鼠标跟随',
+        type: 'checkbox',
+        checked: follow,
+        click: (item) => {
+          savePrefs({ follow: item.checked });
+          win.webContents.send('pet:set-follow', item.checked);
+        }
+      },
       { type: 'separator' },
+      { label: '显示 / 隐藏', accelerator: TOGGLE_ACCELERATOR, click: toggleWindow },
       { label: '退出大肥鱼', accelerator: QUIT_ACCELERATOR, click: () => app.quit() },
     ]).popup({ window: win });
+  });
+
+  // 启动时恢复上次选择的皮肤与跟随状态
+  win.webContents.once('did-finish-load', () => {
+    const prefs = loadPrefs();
+    if (typeof prefs.skin === 'string') win.webContents.send('pet:apply-skin', prefs.skin);
+    if (prefs.follow === false) win.webContents.send('pet:set-follow', false);
   });
 
   win.on('closed', () => {

@@ -15,6 +15,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktopPet', {
   toggle: () => ipcRenderer.send('pet:toggle'),
   quit: () => ipcRenderer.send('pet:quit'),
+  onApplySkin: (cb) => ipcRenderer.on('pet:apply-skin', (_e, id) => cb(id)),
+  onSetFollow: (cb) => ipcRenderer.on('pet:set-follow', (_e, on) => cb(on)),
 });
 
 window.addEventListener('DOMContentLoaded', () => {
