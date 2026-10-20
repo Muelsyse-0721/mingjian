@@ -301,6 +301,11 @@
   function speak(text) {
     if (typeof PetVoice === 'undefined') return;
     if (!PetVoice.isEnabled()) return; // 默认静音：没手动开启就一句话都不读
+    /* v2：优先用角色音色包（Claude / 大肥鱼 各自的预渲染语音），miss 再退回系统语音 */
+    if (typeof PetTTS !== 'undefined' && PetTTS.speak) {
+      PetTTS.speak(activeChar, text);
+      return;
+    }
     PetVoice.speak(text);
   }
 

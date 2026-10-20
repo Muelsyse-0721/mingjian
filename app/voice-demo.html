@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>桌宠音色试听 · 明鉴</title>
+<style>
+  :root{--ink:#1f2329;--muted:#6b7280;--line:#e4e9f0;--bg:#f5f7fb;--navy:#0f172a;--amber:#b45309}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  header{background:var(--navy);color:#fff;padding:26px 20px 22px}
+  .wrap{max-width:880px;margin:0 auto;padding:0 20px}
+  header h1{margin:0 0 6px;font-size:22px}
+  header p{margin:0;color:#9fb0c8;font-size:13px;line-height:1.6}
+  main{padding:22px 0 60px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column}
+  .who{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .who img{width:64px;height:64px;object-fit:contain;border-radius:12px;background:#f8fafc}
+  .who h2{margin:0;font-size:18px}
+  .who .tag{font-size:12px;color:var(--muted)}
+  .linebtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fafbfd;border:1px solid var(--line);
+    border-radius:10px;padding:11px 12px;margin-top:9px;cursor:pointer;font-size:14px;color:var(--ink)}
+  .linebtn:hover{background:#f3f6fb}
+  .linebtn .ico{flex:0 0 22px;height:22px;border-radius:50%;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .linebtn.playing{background:#fff7ea;border-color:#f3d9a8}
+  .meta{margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+  .panel h2{margin:0 0 8px;font-size:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .btn{padding:9px 14px;border-radius:10px;border:1px solid #f3d9a8;background:#fff7ea;color:var(--amber);cursor:pointer;font-size:13.5px}
+  .btn:hover{background:#fdeccf}
+  code{background:#f1f5f9;padding:1px 6px;border-radius:6px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>桌宠音色试听</h1>
+    <p>两个角色各一套音色：固定台词用预渲染音频（音质最好），自由对话回落到系统语音。
+       点任意一句即可播放，建议戴上耳机对比。</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel">
+    <h2>对照你给的两句参考台词</h2>
+    <div class="row" id="refRow"></div>
+    <div class="meta" id="refMeta">加载中…</div>
+  </section>
+
+  <div class="grid">
+    <section class="card" id="card-claude">
+      <div class="who">
+        <img src="assets/pet/skin-claude-medium.png" alt="Claude">
+        <div><h2>Claude</h2><div class="tag" id="tag-claude">—</div></div>
+      </div>
+      <div id="lines-claude"></div>
+    </section>
+
+    <section class="card" id="card-fish">
+      <div class="who">
+        <img src="assets/pet-fish.png" alt="大肥鱼">
+        <div><h2>大肥鱼</h2><div class="tag" id="tag-fish">—</div></div>
+      </div>
+      <div id="lines-fish"></div>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:16px">
+    <h2>说明</h2>
+    <div class="meta">
+      · 音色方案：Edge TTS（<code>zh-CN-XiaoxiaoNeural</code> / <code>zh-CN-XiaoyiNeural</code>）+ 抬调降速，
+      依据你提供的两段参考音频实测音高（~327Hz / ~340Hz）对齐。<br>
+      · 这是<strong>参数拟合</strong>，不是声音克隆——没有用参考音频训练模型。<br>
+      · 重新生成：<code>python tools/tts-build.py</code>（新增台词会自动补渲染，已有文件跳过）。
+    </div>
+  </section>
+</main>
+
+<script>
+var REF = {
+  claude: '好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。',
+  fish: '小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。'
+};
+var SAMPLE = {
+  claude: ['你来了。坐吧，我给你留了位置。', '红茶刚泡好，稍微有点烫。', '这一页讲的是「论证的结构」，要不要听？'],
+  fish: ['今天也来押一注？', '别叫我胖鱼，我叫大肥鱼！', '干饭第一名！白饭最好吃，我去吃饭了（溜）～']
+};
+var manifest = null, audio = null;
+
+function play(src, btn) {
+  if (audio) { audio.pause(); audio = null; }
+  document.querySelectorAll('.linebtn.playing').forEach(function (b) { b.classList.remove('playing'); });
+  audio = new Audio(src);
+  if (btn) { btn.classList.add('playing'); audio.onended = function () { btn.classList.remove('playing'); }; }
+  audio.play().catch(function () { alert('浏览器拦截了自动播放，请再点一次'); });
+}
+
+function makeBtn(text, char, label) {
+  var file = manifest && manifest.profiles[char] && manifest.profiles[char].files[text];
+  var b = document.createElement('button');
+  b.className = 'linebtn';
+  b.innerHTML = '<span class="ico">▶</span><span>' + (label || text) + '</span>';
+  if (!file) { b.disabled = true; b.style.opacity = .5; b.title = '这句还没渲染'; }
+  else b.onclick = function () { play('assets/pet/voice/' + file, b); };
+  return b;
+}
+
+fetch('assets/pet/voice/manifest.json').then(function (r) { return r.json(); }).then(function (m) {
+  manifest = m;
+  ['claude', 'fish'].forEach(function (ch) {
+    var p = m.profiles[ch];
+    if (!p) return;
+    document.getElementById('tag-' + ch).textContent = p.voice.replace('zh-CN-', '').replace('Neural', '') +
+      ' · ' + p.pitch + ' · ' + p.rate + ' · ' + Object.keys(p.files).length + ' 句';
+    var box = document.getElementById('lines-' + ch);
+    SAMPLE[ch].forEach(function (t) { box.appendChild(makeBtn(t, ch)); });
+  });
+
+  var refRow = document.getElementById('refRow');
+  refRow.appendChild(makeBtn(REF.claude, 'claude', 'Claude：' + REF.claude));
+  refRow.appendChild(makeBtn(REF.fish, 'fish', '大肥鱼：' + REF.fish));
+  document.getElementById('refMeta').textContent =
+    '这两句就是从你给的片段里转写出来的原文，可以直接和原视频对照听。';
+}).catch(function () {
+  document.getElementById('refMeta').textContent = '音色包还没生成（先跑 python tools/tts-build.py）。';
+});
+</script>
+</body>
+</html>
