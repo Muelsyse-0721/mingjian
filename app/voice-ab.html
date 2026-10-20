@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>音色 A/B · 克隆 vs Edge · 明鉴</title>
+<style>
+  :root{--ink:#1f2329;--muted:#6b7280;--line:#e4e9f0;--bg:#f5f7fb;--navy:#0f172a;--amber:#b45309;--blue:#1d4ed8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  header{background:var(--navy);color:#fff;padding:24px 20px}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px}
+  header h1{margin:0 0 6px;font-size:21px}
+  header p{margin:0;color:#9fb0c8;font-size:13px;line-height:1.6}
+  main{padding:20px 0 60px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+  .who{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .who img{width:60px;height:60px;object-fit:contain;border-radius:12px;background:#f8fafc}
+  .who h2{margin:0;font-size:18px}
+  .who .tag{font-size:12px;color:var(--muted)}
+  .line{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #f1f4f9}
+  .line:first-of-type{border-top:0}
+  .txt{flex:1;font-size:14px;line-height:1.5}
+  .btn{padding:7px 12px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px;white-space:nowrap}
+  .btn.clone{background:#eef6ff;border-color:#bfdbfe;color:#1d4ed8}
+  .btn.edge{background:#fff7ea;border-color:#f3d9a8;color:#b45309}
+  .btn:hover{filter:brightness(.97)}
+  .btn.playing{outline:2px solid currentColor}
+  .btn[disabled]{opacity:.45;cursor:default}
+  .note{font-size:12.5px;color:var(--muted);line-height:1.7}
+  .badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>音色 A/B：克隆版 vs Edge 版</h1>
+    <p>左边是 Qwen3-TTS 0.6B 用你视频里的原声克隆出来的；右边是之前用 Edge TTS 调参拟合的。
+       同一句话点两个按钮对比，确认哪版更像、更自然。</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card" id="card-fish">
+    <div class="who">
+      <img src="assets/pet-fish.png" alt="大肥鱼">
+      <div><h2>大肥鱼</h2><div class="tag" id="tag-fish">—</div></div>
+    </div>
+    <div id="lines-fish"></div>
+  </section>
+
+  <section class="card" id="card-claude">
+    <div class="who">
+      <img src="assets/pet/skin-claude-medium.png" alt="Claude">
+      <div><h2>Claude</h2><div class="tag" id="tag-claude">—</div></div>
+    </div>
+    <div id="lines-claude"></div>
+  </section>
+
+  <section class="card">
+    <div class="note">
+      参考音频未上传到公网（来自你的视频素材）。克隆只在本机跑：<code>tools/voice_clone.py</code>。<br>
+      克隆版通过 <code>tools/pack_install.py</code> 打包进 <code>app/assets/pet/voice-clone/</code>，
+      桌宠会优先用它；Edge 版保留在 <code>app/assets/pet/voice/</code> 作为兜底。
+    </div>
+  </section>
+</main>
+
+<script>
+var SAMPLE = {
+  fish: ['今天也来押一注？', '别叫我胖鱼，我叫大肥鱼！', '小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。', '干饭第一名！白饭最好吃，我去吃饭了（溜）～'],
+  claude: ['你来了。坐吧，我给你留了位置。', '红茶刚泡好，稍微有点烫。', '这傻鱼昨天宕机了，7天吃的token全吐出来了。', '如果你愿意，我们可以慢慢聊。']
+};
+var packs = { clone: null, edge: null };
+var audio = null;
+
+function play(src, btn) {
+  if (audio) { audio.pause(); audio = null; }
+  document.querySelectorAll('.btn.playing').forEach(function (b) { b.classList.remove('playing'); });
+  audio = new Audio(src);
+  if (btn) { btn.classList.add('playing'); audio.onended = function () { btn.classList.remove('playing'); }; }
+  audio.play().catch(function () { alert('浏览器拦截了播放，请再点一次'); });
+}
+
+function makeBtn(label, cls, src) {
+  var b = document.createElement('button');
+  b.className = 'btn ' + cls;
+  b.textContent = label;
+  if (!src) { b.disabled = true; b.textContent = label + '(无)'; }
+  else b.onclick = function () { play(src, b); };
+  return b;
+}
+
+function render() {
+  ['fish', 'claude'].forEach(function (ch) {
+    var box = document.getElementById('lines-' + ch);
+    box.innerHTML = '';
+    SAMPLE[ch].forEach(function (text) {
+      var row = document.createElement('div');
+      row.className = 'line';
+      var t = document.createElement('div');
+      t.className = 'txt';
+      t.textContent = text;
+      var cf = packs.clone && packs.clone.profiles[ch] && packs.clone.profiles[ch].files[text];
+      var ef = packs.edge && packs.edge.profiles[ch] && packs.edge.profiles[ch].files[text];
+      row.appendChild(t);
+      row.appendChild(makeBtn('克隆', 'clone', cf ? 'assets/pet/voice-clone/' + cf : null));
+      row.appendChild(makeBtn('Edge', 'edge', ef ? 'assets/pet/voice/' + ef : null));
+      box.appendChild(row);
+    });
+    var p = packs.clone && packs.clone.profiles[ch];
+    document.getElementById('tag-' + ch).textContent = p
+      ? (p.engine + (p.seed != null ? ' · seed ' + p.seed : '') + ' · ' + Object.keys(p.files).length + ' 句')
+      : '克隆包未生成（先跑 voice_clone.py --pack && pack_install.py）';
+  });
+}
+
+Promise.all([
+  fetch('assets/pet/voice-clone/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+  fetch('assets/pet/voice/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+]).then(function (res) {
+  packs.clone = res[0];
+  packs.edge = res[1];
+  render();
+});
+</script>
+</body>
+</html>

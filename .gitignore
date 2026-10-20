@@ -29,3 +29,6 @@ tools/data/*.lock
 tools/CosyVoice/
 tools/cv-venv/
 tools/data/anchor-secret.txt
+tools/models/
+tools/tts-venv/
+tools/voice-out/

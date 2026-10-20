@@ -13,7 +13,9 @@
 var PetTTS = (function () {
   'use strict';
 
-  var BASE = 'assets/pet/voice/';
+  /* 音色包优先级：克隆版 → Edge 版 */
+  var PACKS = ['assets/pet/voice-clone/', 'assets/pet/voice/'];
+  var BASE = PACKS[PACKS.length - 1];
   var manifest = null;
   var loading = null;
   var current = null;
@@ -31,10 +33,20 @@ var PetTTS = (function () {
 
   function load() {
     if (loading) return loading;
-    loading = fetch(BASE + 'manifest.json', { cache: 'force-cache' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { manifest = j; return j; })
-      .catch(function () { manifest = null; return null; });
+    loading = (async function () {
+      for (var i = 0; i < PACKS.length; i++) {
+        try {
+          var r = await fetch(PACKS[i] + 'manifest.json', { cache: 'force-cache' });
+          if (r.ok) {
+            manifest = await r.json();
+            BASE = PACKS[i];
+            return manifest;
+          }
+        } catch (e) { /* 试下一个 */ }
+      }
+      manifest = null;
+      return null;
+    })();
     return loading;
   }
 
@@ -87,7 +99,8 @@ var PetTTS = (function () {
     stop: stop,
     load: load,
     ready: function () { return !!manifest; },
-    manifest: function () { return manifest; }
+    manifest: function () { return manifest; },
+    pack: function () { return BASE; }
   };
 })();
 
