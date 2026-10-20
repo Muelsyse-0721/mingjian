@@ -81,8 +81,9 @@
 
 <script>
 var REF = {
-  claude: '好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。',
-  fish: '小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。'
+  claude: '这傻鱼昨天宕机了，7天吃的token全吐出来了。',
+  fish: '小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。',
+  fish2: '好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。'
 };
 var SAMPLE = {
   claude: ['你来了。坐吧，我给你留了位置。', '红茶刚泡好，稍微有点烫。', '这一页讲的是「论证的结构」，要不要听？'],
@@ -122,8 +123,9 @@ fetch('assets/pet/voice/manifest.json').then(function (r) { return r.json(); }).
   var refRow = document.getElementById('refRow');
   refRow.appendChild(makeBtn(REF.claude, 'claude', 'Claude：' + REF.claude));
   refRow.appendChild(makeBtn(REF.fish, 'fish', '大肥鱼：' + REF.fish));
+  refRow.appendChild(makeBtn(REF.fish2, 'fish', '大肥鱼：' + REF.fish2));
   document.getElementById('refMeta').textContent =
-    '这两句就是从你给的片段里转写出来的原文，可以直接和原视频对照听。';
+    '这三句都来自你给的片段原文（`fish_context.wav` 是两人对话），可以直接和原视频对照听。';
 }).catch(function () {
   document.getElementById('refMeta').textContent = '音色包还没生成（先跑 python tools/tts-build.py）。';
 });

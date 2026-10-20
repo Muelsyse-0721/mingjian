@@ -24,14 +24,16 @@ PET_JS = ROOT / "app" / "pet.js"
 OUT = ROOT / "app" / "assets" / "pet" / "voice"
 
 PROFILES = {
-    "claude": {"voice": "zh-CN-XiaoxiaoNeural", "pitch": "+60Hz", "rate": "-22%"},
-    "fish":   {"voice": "zh-CN-XiaoyiNeural",   "pitch": "+20Hz", "rate": "-15%"},
+    "claude": {"voice": "zh-CN-XiaoxiaoNeural", "pitch": "+40Hz", "rate": "-18%"},
+    "fish":   {"voice": "zh-CN-XiaoyiNeural",   "pitch": "+35Hz", "rate": "-12%"},
 }
 
 # 与视频里两句参考台词（用于 A/B 对照，始终包含）
+# 视频原文（fish_context.wav 是两人对话，按说话人切分后取的代表句）
 REFERENCE = {
-    "claude": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
-    "fish": "小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。",
+    "claude": "这傻鱼昨天宕机了，7天吃的token全吐出来了。",
+    "fish": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
+    "fish_extra": "小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。",
 }
 
 
@@ -55,8 +57,9 @@ def extract_lines():
     fish = [t for t in fish if not any(s in t for s in skip)]
     claude = [t for t in claude if not any(s in t for s in skip)]
 
-    if REFERENCE["fish"] not in fish:
-        fish.insert(0, REFERENCE["fish"])
+    for t in (REFERENCE["fish"], REFERENCE["fish_extra"]):
+        if t not in fish:
+            fish.insert(0, t)
     if REFERENCE["claude"] not in claude:
         claude.insert(0, REFERENCE["claude"])
     return {"fish": fish, "claude": claude}

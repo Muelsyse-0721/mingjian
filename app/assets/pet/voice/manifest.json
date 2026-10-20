@@ -3,10 +3,11 @@
  "profiles": {
   "fish": {
    "voice": "zh-CN-XiaoyiNeural",
-   "pitch": "+20Hz",
-   "rate": "-15%",
+   "pitch": "+35Hz",
+   "rate": "-12%",
    "files": {
     "小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。": "fish/8d0a2635fa54.mp3",
+    "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。": "fish/6c597dab8ec3.mp3",
     "好，我看着你的鼠标。": "fish/a680229969ae.mp3",
     "那我不看了，专心看书。": "fish/429fce4f51de.mp3",
     "今天也来押一注？": "fish/7097f27d0485.mp3",
@@ -82,10 +83,10 @@
   },
   "claude": {
    "voice": "zh-CN-XiaoxiaoNeural",
-   "pitch": "+60Hz",
-   "rate": "-22%",
+   "pitch": "+40Hz",
+   "rate": "-18%",
    "files": {
-    "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。": "claude/6c597dab8ec3.mp3",
+    "这傻鱼昨天宕机了，7天吃的token全吐出来了。": "claude/6c9e2abd80d3.mp3",
     "我在读一本旧书，你要一起吗？": "claude/7d3a1b24465c.mp3",
     "红茶刚泡好，稍微有点烫。": "claude/21ddaf41313e.mp3",
     "窗边的光很好，适合写点东西。": "claude/4f5a9a0548f7.mp3",
