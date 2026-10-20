@@ -30,6 +30,9 @@ VOICES = {
     },
     "claude": {
         "ref": "tools/refs/claude.wav",
+        # 参考音频是"生气"语气；用 x_vector_only 只取音色、丢掉语气，
+        # 否则所有台词都会带着怒气（实测相似度还更高：0.808 vs 0.769）
+        "xvec": True,
         "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。",
     },
 }
@@ -65,7 +68,7 @@ def build_prompt(model, voice):
     return model.create_voice_clone_prompt(
         ref_audio=str(wav),
         ref_text=cfg["text"],
-        x_vector_only_mode=False,
+        x_vector_only_mode=bool(cfg.get("xvec", False)),
     )
 
 

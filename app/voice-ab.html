@@ -24,6 +24,7 @@
   .btn{padding:7px 12px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px;white-space:nowrap}
   .btn.clone{background:#eef6ff;border-color:#bfdbfe;color:#1d4ed8}
   .btn.edge{background:#fff7ea;border-color:#f3d9a8;color:#b45309}
+  .btn.old{background:#fdecea;border-color:#f5c2c0;color:#b91c1c}
   .btn:hover{filter:brightness(.97)}
   .btn.playing{outline:2px solid currentColor}
   .btn[disabled]{opacity:.45;cursor:default}
@@ -67,10 +68,14 @@
 </main>
 
 <script>
-var SAMPLE = {
-  fish: ['今天也来押一注？', '别叫我胖鱼，我叫大肥鱼！', '小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。', '干饭第一名！白饭最好吃，我去吃饭了（溜）～'],
-  claude: ['你来了。坐吧，我给你留了位置。', '红茶刚泡好，稍微有点烫。', '这傻鱼昨天宕机了，7天吃的token全吐出来了。', '如果你愿意，我们可以慢慢聊。']
-};
+/* Claude 三版对比：旧(带怒气) / 新(只取音色，去情绪) / Edge */
+var CL = [
+  { text: '你来了。坐吧，我给你留了位置。', i: '030' },
+  { text: '红茶刚泡好，稍微有点烫。', i: '002' },
+  { text: '这一页讲的是「论证的结构」，要不要听？', i: '023' },
+  { text: '如果你愿意，我们可以慢慢聊。', i: '004' }
+];
+var FISH = ['今天也来押一注？', '别叫我胖鱼，我叫大肥鱼！', '干饭第一名！白饭最好吃，我去吃饭了（溜）～'];
 var packs = { clone: null, edge: null };
 var audio = null;
 
@@ -82,7 +87,7 @@ function play(src, btn) {
   audio.play().catch(function () { alert('浏览器拦截了播放，请再点一次'); });
 }
 
-function makeBtn(label, cls, src) {
+function btn(label, cls, src) {
   var b = document.createElement('button');
   b.className = 'btn ' + cls;
   b.textContent = label;
@@ -91,38 +96,54 @@ function makeBtn(label, cls, src) {
   return b;
 }
 
+function row(text, buttons) {
+  var r = document.createElement('div');
+  r.className = 'line';
+  var t = document.createElement('div');
+  t.className = 'txt'; t.textContent = text;
+  r.appendChild(t);
+  buttons.forEach(function (b) { r.appendChild(b); });
+  return r;
+}
+
 function render() {
-  ['fish', 'claude'].forEach(function (ch) {
-    var box = document.getElementById('lines-' + ch);
-    box.innerHTML = '';
-    SAMPLE[ch].forEach(function (text) {
-      var row = document.createElement('div');
-      row.className = 'line';
-      var t = document.createElement('div');
-      t.className = 'txt';
-      t.textContent = text;
-      var cf = packs.clone && packs.clone.profiles[ch] && packs.clone.profiles[ch].files[text];
-      var ef = packs.edge && packs.edge.profiles[ch] && packs.edge.profiles[ch].files[text];
-      row.appendChild(t);
-      row.appendChild(makeBtn('克隆', 'clone', cf ? 'assets/pet/voice-clone/' + cf : null));
-      row.appendChild(makeBtn('Edge', 'edge', ef ? 'assets/pet/voice/' + ef : null));
-      box.appendChild(row);
-    });
-    var p = packs.clone && packs.clone.profiles[ch];
-    document.getElementById('tag-' + ch).textContent = p
-      ? (p.engine + (p.seed != null ? ' · seed ' + p.seed : '') + ' · ' + Object.keys(p.files).length + ' 句')
-      : '克隆包未生成（先跑 voice_clone.py --pack && pack_install.py）';
+  /* Claude：v1 / v2 / Edge */
+  var box = document.getElementById('lines-claude');
+  box.innerHTML = '';
+  CL.forEach(function (o) {
+    var ef = packs.edge && packs.edge.profiles.claude && packs.edge.profiles.claude.files[o.text];
+    box.appendChild(row(o.text, [
+      btn('旧·带怒气', 'old', 'assets/pet/voice-ab/v1/claude-' + o.i + '.m4a'),
+      btn('新·去情绪', 'clone', 'assets/pet/voice-ab/v2/claude-' + o.i + '.m4a'),
+      btn('Edge', 'edge', ef ? 'assets/pet/voice/' + ef : null)
+    ]));
   });
+  var cp = packs.clone && packs.clone.profiles.claude;
+  document.getElementById('tag-claude').textContent = cp
+    ? ('Qwen3-TTS 克隆 · x_vector_only（只取音色） · ' + Object.keys(cp.files).length + ' 句')
+    : '克隆包未生成';
+
+  /* 大肥鱼：克隆 / Edge */
+  var fb = document.getElementById('lines-fish');
+  fb.innerHTML = '';
+  FISH.forEach(function (text) {
+    var cf = packs.clone && packs.clone.profiles.fish && packs.clone.profiles.fish.files[text];
+    var ef = packs.edge && packs.edge.profiles.fish && packs.edge.profiles.fish.files[text];
+    fb.appendChild(row(text, [
+      btn('克隆', 'clone', cf ? 'assets/pet/voice-clone/' + cf : null),
+      btn('Edge', 'edge', ef ? 'assets/pet/voice/' + ef : null)
+    ]));
+  });
+  var fp = packs.clone && packs.clone.profiles.fish;
+  document.getElementById('tag-fish').textContent = fp
+    ? ('Qwen3-TTS 克隆 · ' + Object.keys(fp.files).length + ' 句')
+    : '克隆包未生成';
 }
 
 Promise.all([
   fetch('assets/pet/voice-clone/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
   fetch('assets/pet/voice/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
-]).then(function (res) {
-  packs.clone = res[0];
-  packs.edge = res[1];
-  render();
-});
+]).then(function (res) { packs.clone = res[0]; packs.edge = res[1]; render(); });
 </script>
 </body>
 </html>
