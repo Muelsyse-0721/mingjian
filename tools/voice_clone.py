@@ -21,11 +21,19 @@ MODEL_DIR = ROOT / "tools" / "models" / "Qwen3-TTS-0.6B"
 REFS = ROOT / "tools" / "refs"
 OUT_DIR = ROOT / "tools" / "voice-out"
 
-# 参考音频对应的原文（ASR 转写，人工校对了专有名词）
-REF_TEXT = {
-    "fish": "小克，你最好了，放我下来，我再去吃几口好不好嘛？哇哦，99成稀罕物。",
-    "claude": "这傻鱼昨天宕机了，7天吃的token全吐出来了。我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。",
+# 参考音频 + 对应原文（必须严格成对，否则克隆会跑偏）
+# 实测：鱼用 clipA 当参考比 clipB 更像（相似度 0.72 vs 0.66）
+VOICES = {
+    "fish": {
+        "ref": "tools/refs/fish_a.wav",
+        "text": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
+    },
+    "claude": {
+        "ref": "tools/refs/claude.wav",
+        "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。",
+    },
 }
+REF_TEXT = {k: v["text"] for k, v in VOICES.items()}
 
 DEMO = {
     "fish": "今天也来押一注？",
@@ -49,13 +57,14 @@ def load_model(device):
 
 def build_prompt(model, voice):
     """构建可复用的克隆 prompt（一次提取，多次生成）"""
-    wav = REFS / f"{voice}.wav"
+    cfg = VOICES[voice]
+    wav = ROOT / cfg["ref"]
     if not wav.exists():
         raise SystemExit(f"缺少参考音频 {wav}")
     print(f"提取音色特征：{wav.name}")
     return model.create_voice_clone_prompt(
         ref_audio=str(wav),
-        ref_text=REF_TEXT[voice],
+        ref_text=cfg["text"],
         x_vector_only_mode=False,
     )
 
@@ -78,7 +87,11 @@ def gen(model, prompt, text, out, language="Chinese", seed=42, max_tokens=None):
     out.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(out), wavs[0], sr)
     dur = len(wavs[0]) / sr
-    print(f"  → {out.relative_to(ROOT)}  {dur:.2f}s  {sr}Hz")
+    try:
+        shown = out.resolve().relative_to(ROOT)
+    except Exception:
+        shown = out
+    print(f"  → {shown}  {dur:.2f}s  {sr}Hz")
     return out
 
 
