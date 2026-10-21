@@ -32,3 +32,4 @@ tools/data/anchor-secret.txt
 tools/models/
 tools/tts-venv/
 tools/voice-out/
+tools/corpus/_work/

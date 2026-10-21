@@ -1,0 +1,54 @@
+[
+ {
+  "file": "claude/fish_context_s0_000.wav",
+  "source": "fish_context",
+  "speaker": "s0",
+  "ai": "claude",
+  "score": "manual",
+  "start": 0.15,
+  "end": 3.17,
+  "dur": 3.02,
+  "f0": 308,
+  "rms": 0.205,
+  "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。"
+ },
+ {
+  "file": "claude/fish_context_s0_001.wav",
+  "source": "fish_context",
+  "speaker": "s0",
+  "ai": "claude",
+  "score": "manual",
+  "start": 6.35,
+  "end": 11.0,
+  "dur": 4.65,
+  "f0": 250,
+  "rms": 0.194,
+  "text": "我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。"
+ },
+ {
+  "file": "fish/fish_context_s1_000.wav",
+  "source": "fish_context",
+  "speaker": "s1",
+  "ai": "fish",
+  "score": "manual",
+  "start": 3.17,
+  "end": 6.35,
+  "dur": 3.17,
+  "f0": 296,
+  "rms": 0.147,
+  "text": "我有吃这么多吗？"
+ },
+ {
+  "file": "fish/fish_context_s1_001.wav",
+  "source": "fish_context",
+  "speaker": "s1",
+  "ai": "fish",
+  "score": "manual",
+  "start": 11.9,
+  "end": 15.9,
+  "dur": 4.0,
+  "f0": 254,
+  "rms": 0.202,
+  "text": "小克你最好了，放我下来，我再去吃几口好不好？"
+ }
+]
