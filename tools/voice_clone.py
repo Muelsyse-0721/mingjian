@@ -29,7 +29,7 @@ VOICES = {
         "text": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
     },
     "claude": {
-        "ref": "tools/refs/claude.wav",
+        "ref": "tools/refs/claude_v2.wav",
         # 参考音频是"生气"语气；用 x_vector_only 只取音色、丢掉语气，
         # 否则所有台词都会带着怒气（实测相似度还更高：0.808 vs 0.769）
         "xvec": True,
