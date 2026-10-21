@@ -75,5 +75,47 @@
   "emotion_en": "begging",
   "intensity": 0.75,
   "evidence": "F0 294Hz、句尾「嘛」上挑拖长、气声多"
+ },
+ "fish/ep1_man_00.wav": {
+  "text": "米饭多香啊，白白软软的大米饭，颗颗饱满，丝丝清甜，要是每餐能吃10碗该多好啊。",
+  "emotion": "陶醉·馋",
+  "emotion_en": "yearning",
+  "intensity": 0.85,
+  "evidence": "句尾上挑拖长、语速渐快、气息连贯——典型的馋嘴独白"
+ },
+ "fish/ep1_man_01.wav": {
+  "text": "还有砂锅大米饭、油焖大米饭。",
+  "emotion": "得意·补充",
+  "emotion_en": "proud",
+  "intensity": 0.6,
+  "evidence": "短句连报、语调平稳上扬，像在炫耀菜单"
+ },
+ "fish/ep1_man_02.wav": {
+  "text": "为什么？可是我想跟Claude姐姐睡啊。",
+  "emotion": "撒娇·委屈",
+  "emotion_en": "whiny",
+  "intensity": 0.7,
+  "evidence": "F0 308Hz（本片段最高）、「啊」字拖长带颤"
+ },
+ "fish/ep2_man_03.wav": {
+  "text": "冬眠假期刚刚结束，闷死我了。",
+  "emotion": "懒散·抱怨",
+  "emotion_en": "listless",
+  "intensity": 0.65,
+  "evidence": "F0 163Hz（全语料最低）、语速慢、气声多"
+ },
+ "fish/ep2_man_04.wav": {
+  "text": "我叫DeepSeek森，但他们都叫我大肥鱼，还说我吃白饭不干活。",
+  "emotion": "自我介绍·不服",
+  "emotion_en": "defensive",
+  "intensity": 0.5,
+  "evidence": "语调平直、句尾下沉；念到「吃白饭不干活」音量略抬"
+ },
+ "fish/ep2_man_05.wav": {
+  "text": "胡说。我明明超能干的好不好。",
+  "emotion": "不服气·辩驳",
+  "emotion_en": "indignant",
+  "intensity": 0.8,
+  "evidence": "F0 190Hz 但音量高、「胡说」短促爆发、句尾反问上扬"
  }
 }
