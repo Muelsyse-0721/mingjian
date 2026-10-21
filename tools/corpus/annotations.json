@@ -1,51 +1,79 @@
 {
- "claude/fish_context_s0_000.wav": {
+ "claude/dfy_s0_000.wav": {
   "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。",
   "emotion": "恼火·责备",
   "emotion_en": "angry",
   "intensity": 0.8,
-  "evidence": "F0 308Hz（本角色最高）、能量 0.205、句尾降调短促"
+  "evidence": "F0 308Hz（本角色最高）、句尾短促下压"
  },
- "claude/fish_context_s0_001.wav": {
-  "text": "我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。",
+ "claude/dfy_s0_001.wav": {
+  "text": "我也没想到你能吃这么多。我去回收了cloud，你抓好他，别让他溜出去偷吃。",
   "emotion": "无奈·嫌弃",
   "emotion_en": "exasperated",
   "intensity": 0.6,
-  "evidence": "F0 250Hz（回落到本角色低位）、语速放缓、句中停顿多"
+  "evidence": "F0 258Hz 回落到本角色低位、语速放缓、句间停顿多"
  },
- "fish/fish_context_s1_000.wav": {
-  "text": "我有吃这么多吗？",
-  "emotion": "心虚·装傻",
-  "emotion_en": "sheepish",
-  "intensity": 0.5,
-  "evidence": "能量 0.147（全部片段最低，音量发虚）、句尾上扬带疑问"
+ "claude/dfy_s0_002.wav": {
+  "text": "停下，别喂了，我就说他刚吐完，不能吃这么多。",
+  "emotion": "急切·制止",
+  "emotion_en": "urgent",
+  "intensity": 0.85,
+  "evidence": "开头「停下」短促高起、连续短句无停顿——保护性制止"
  },
- "fish/fish_context_s1_001.wav": {
-  "text": "小克你最好了，放我下来，我再去吃几口好不好？",
-  "emotion": "撒娇·讨好",
-  "emotion_en": "coquettish",
-  "intensity": 0.8,
-  "evidence": "F0 254→上扬、句尾「好不好」拖长、音量忽高忽低"
+ "claude/dfy_s0_003.wav": {
+  "text": "38度5，发着烧还吃那么多，难怪那么冷，先把水喝了，睡一觉会好些。",
+  "emotion": "关切·温柔",
+  "emotion_en": "caring",
+  "intensity": 0.7,
+  "evidence": "F0 254Hz、语调平缓下行、句末拖长——本角色最柔和的一段"
  },
  "fish/clipA_s0_000.wav": {
   "text": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
   "emotion": "委屈（转惊喜）",
   "emotion_en": "aggrieved→surprised",
   "intensity": 0.7,
-  "evidence": "开头「啊」音拉长、后半句音高抬升；情绪在中途转折"
+  "evidence": "开头「啊」拉长带颤、后半句音高抬升；情绪中途转折"
  },
- "fish/clipB_s0_000.wav": {
-  "text": "小克，你最好了，放我下来，我再去吃几口好不好嘛？",
+ "fish/dfy_fish_s0_000.wav": {
+  "text": "我有吃这么多吗？",
+  "emotion": "心虚·装傻",
+  "emotion_en": "sheepish",
+  "intensity": 0.5,
+  "evidence": "F0 308Hz 偏高但音量弱、句尾上扬试探"
+ },
+ "fish/dfy_fish_s0_001.wav": {
+  "text": "小克你最好了，放我下来，我再去吃几口好不好嘛？",
   "emotion": "撒娇",
   "emotion_en": "coquettish",
-  "intensity": 0.9,
-  "evidence": "F0 239Hz 偏低但句尾上挑、语速快、「嘛」鼻音拖长"
+  "intensity": 0.85,
+  "evidence": "F0 296Hz、句尾「嘛」鼻音拖长、语速偏快"
  },
- "fish/clipB_s0_001.wav": {
+ "fish/dfy_fish_s0_002.wav": {
   "text": "哇哦，99成稀罕物。",
   "emotion": "惊喜",
   "emotion_en": "delighted",
   "intensity": 0.8,
-  "evidence": "「哇哦」起音高、能量 0.265（最高）、语速快而轻"
+  "evidence": "「哇哦」气声起音、短句轻快；F0 165Hz 是气声导致测量偏低"
+ },
+ "fish/dfy_fish_s0_003.wav": {
+  "text": "撑死哥不要了，吃不下了，等等别塞了。",
+  "emotion": "撑到求饶",
+  "emotion_en": "overstuffed",
+  "intensity": 0.8,
+  "evidence": "F0 291Hz、连续短促重复、尾音发飘——吃撑后的挣扎"
+ },
+ "fish/dfy_fish_s0_004.wav": {
+  "text": "小克，你对我真好。",
+  "emotion": "感动",
+  "emotion_en": "touched",
+  "intensity": 0.6,
+  "evidence": "F0 135Hz（低声气声，测量偏低）、语速慢、尾音下沉"
+ },
+ "fish/dfy_fish_s0_005.wav": {
+  "text": "再攒一个给我好不好嘛？",
+  "emotion": "撒娇·讨价还价",
+  "emotion_en": "begging",
+  "intensity": 0.75,
+  "evidence": "F0 294Hz、句尾「嘛」上挑拖长、气声多"
  }
 }

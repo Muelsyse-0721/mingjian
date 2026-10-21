@@ -1,0 +1,8 @@
+file 'tools/corpus/_dfy/utt/027.wav'
+file 'tools/corpus/_dfy/utt/038.wav'
+file 'tools/corpus/_dfy/utt/040.wav'
+file 'tools/corpus/_dfy/utt/046.wav'
+file 'tools/corpus/_dfy/utt/047.wav'
+file 'tools/corpus/_dfy/utt/049.wav'
+file 'tools/corpus/_dfy/utt/050.wav'
+file 'tools/corpus/_dfy/utt/051.wav'
