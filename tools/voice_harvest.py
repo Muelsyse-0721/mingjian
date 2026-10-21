@@ -125,8 +125,8 @@ def merge_short_gaps(segs, gap=0.35, min_len=0.8):
     return [s for s in out if s["end"] - s["start"] >= min_len]
 
 
-def harvest(media: Path, transcript: Path, source: str, mapping=None):
-    segs = merge_short_gaps(parse_transcript(transcript))
+def harvest(media: Path, transcript: Path, source: str, mapping=None, gap=0.35):
+    segs = merge_short_gaps(parse_transcript(transcript), gap=gap)
     if not segs:
         raise SystemExit("转写文件里没解析出有效片段")
 
@@ -172,6 +172,107 @@ def harvest(media: Path, transcript: Path, source: str, mapping=None):
     print(f"写入 {len(entries)} 段 → {mf}")
 
 
+def silence_split(path: Path, min_len=0.7, max_len=8.0, gap=0.28):
+    """基于能量的静音切分：单说话人音频 → 若干短句区间"""
+    import wave
+
+    w = wave.open(str(path), "rb")
+    sr = w.getframerate()
+    x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(float) / 32768
+    w.close()
+    if w.getnchannels() > 1:
+        x = x.reshape(-1, w.getnchannels()).mean(axis=1)
+
+    hop = int(0.02 * sr)
+    fl = int(0.04 * sr)
+    rms = []
+    for i in range(0, len(x) - fl, hop):
+        rms.append(np.sqrt(np.mean(x[i:i + fl] ** 2)))
+    rms = np.array(rms)
+    if not len(rms):
+        return []
+    thr = max(0.015, 0.18 * np.median(rms[rms > 0.01]) if (rms > 0.01).any() else 0.02)
+
+    voice = rms > thr
+    segs, start = [], None
+    for i, v in enumerate(voice):
+        if v and start is None:
+            start = i
+        elif not v and start is not None:
+            segs.append((start, i))
+            start = None
+    if start is not None:
+        segs.append((start, len(voice)))
+
+    # 合并短间隔
+    merged = []
+    for a, b in segs:
+        if merged and (a - merged[-1][1]) * 0.02 <= gap:
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+
+    out = []
+    for a, b in merged:
+        t0, t1 = a * 0.02, b * 0.02
+        if t1 - t0 < min_len:
+            continue
+        # 超长的按 max_len 硬切
+        while t1 - t0 > max_len:
+            out.append((t0, t0 + max_len))
+            t0 += max_len
+        out.append((t0, t1))
+    return out
+
+
+def harvest_split(media: Path, source: str, ai: str):
+    """不需要转写：直接把单说话人音频按静音切成短句，归到指定 AI"""
+    wav = CORPUS / "_work" / f"{source}.wav"
+    to_wav(media, wav)
+    segs = silence_split(wav)
+    entries = []
+    for i, (a, b) in enumerate(segs):
+        dst = CORPUS / ai / f"{source}_{i:03d}.wav"
+        cut(wav, dst, a, b - a)
+        f0, rms = f0_rms(dst)
+        entries.append({
+            "file": str(dst.relative_to(CORPUS)), "source": source,
+            "speaker": "", "ai": ai, "start": round(a, 2), "end": round(b, 2),
+            "dur": round(b - a, 2), "f0": round(f0), "rms": round(rms, 3), "text": "",
+        })
+    mf = CORPUS / "manifest.json"
+    old = json.loads(mf.read_text(encoding="utf-8")) if mf.exists() else []
+    old = [e for e in old if e.get("source") != source] + entries
+    mf.parent.mkdir(parents=True, exist_ok=True)
+    mf.write_text(json.dumps(old, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{source} → {ai}：切出 {len(entries)} 段，总 {sum(e['dur'] for e in entries):.1f}s")
+
+
+def annotate():
+    """把人工标注（情绪/原文）合并进 manifest，并生成 INDEX.md"""
+    mf = CORPUS / "manifest.json"
+    af = CORPUS / "annotations.json"
+    if not mf.exists():
+        print("还没有 manifest")
+        return
+    data = json.loads(mf.read_text(encoding="utf-8"))
+    ann = json.loads(af.read_text(encoding="utf-8")) if af.exists() else {}
+    for e in data:
+        a = ann.get(e["file"])
+        if a:
+            e.update(a)
+    mf.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    lines = ["# AI 娘语料索引", "", "| AI | 文件 | 时长 | F0 | 情绪 | 原文 |", "|---|---|---|---|---|---|"]
+    for e in sorted(data, key=lambda x: (x["ai"], x["file"])):
+        lines.append(
+            f"| {e['ai']} | `{e['file']}` | {e['dur']:.1f}s | {e.get('f0', 0)}Hz | "
+            f"{e.get('emotion', '—')} | {e.get('text', '')} |"
+        )
+    (CORPUS / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"标注 {len(ann)} 段 → manifest + INDEX.md")
+
+
 def scan(folder: Path):
     """列出目录里的媒体：时长 + 是否已有同名转写（.txt）"""
     exts = {".mp4", ".mov", ".mkv", ".webm", ".m4a", ".mp3", ".wav", ".aac"}
@@ -203,10 +304,15 @@ def report():
         a["dur"] += e["dur"]
         if e.get("f0"):
             a["f0"].append(e["f0"])
-    print(f"{'AI':10} {'片段':>4} {'总时长':>7} {'F0中位':>6}")
+    print(f"{'AI':10} {'片段':>4} {'总时长':>7} {'F0中位':>6}  情绪分布")
     for ai, a in sorted(agg.items(), key=lambda kv: -kv[1]["dur"]):
         f0 = int(np.median(a["f0"])) if a["f0"] else 0
-        print(f"{ai:10} {a['n']:4} {a['dur']:6.1f}s {f0:6}Hz")
+        emos = {}
+        for e in data:
+            if e["ai"] == ai and e.get("emotion"):
+                emos[e["emotion"]] = emos.get(e["emotion"], 0) + 1
+        dist = " ".join(f"{k}×{v}" for k, v in emos.items()) or "—"
+        print(f"{ai:10} {a['n']:4} {a['dur']:6.1f}s {f0:6}Hz  {dist}")
 
 
 def main():
@@ -217,8 +323,18 @@ def main():
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--map", default="", help="手工指定说话人，如 s0=claude,s1=fish")
     ap.add_argument("--scan", help="扫描目录里的媒体，列出时长与转写状态")
+    ap.add_argument("--split", help="静音切分模式：媒体文件路径（单说话人）")
+    ap.add_argument("--ai", default="unknown", help="配合 --split：该音频属于哪个 AI")
+    ap.add_argument("--gap", type=float, default=0.35, help="合并同一说话人相邻段的间隔阈值（秒）")
+    ap.add_argument("--annotate", action="store_true", help="把 annotations.json 合进 manifest 并生成 INDEX.md")
     args = ap.parse_args()
 
+    if args.annotate:
+        annotate()
+        return
+    if args.split:
+        harvest_split(Path(args.split), args.source or Path(args.split).stem, args.ai)
+        return
     if args.scan:
         scan(Path(args.scan))
         return
@@ -236,7 +352,7 @@ def main():
         if k and v:
             mapping[k.strip()] = v.strip()
     print(f"采集 {media.name} → 源标记 {source}" + (f"（手工映射 {mapping}）" if mapping else ""))
-    harvest(media, Path(args.transcript), source, mapping)
+    harvest(media, Path(args.transcript), source, mapping, gap=args.gap)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,11 @@
   "dur": 3.02,
   "f0": 308,
   "rms": 0.205,
-  "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。"
+  "text": "这傻鱼昨天宕机了，7天吃的token全吐出来了。",
+  "emotion": "恼火·责备",
+  "emotion_en": "angry",
+  "intensity": 0.8,
+  "evidence": "F0 308Hz（本角色最高）、能量 0.205、句尾降调短促"
  },
  {
   "file": "claude/fish_context_s0_001.wav",
@@ -23,7 +27,11 @@
   "dur": 4.65,
   "f0": 250,
   "rms": 0.194,
-  "text": "我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。"
+  "text": "我也没想到你能吃这么多。我去回收了cloud，你抓好它，别让它溜出去偷吃。",
+  "emotion": "无奈·嫌弃",
+  "emotion_en": "exasperated",
+  "intensity": 0.6,
+  "evidence": "F0 250Hz（回落到本角色低位）、语速放缓、句中停顿多"
  },
  {
   "file": "fish/fish_context_s1_000.wav",
@@ -36,7 +44,11 @@
   "dur": 3.17,
   "f0": 296,
   "rms": 0.147,
-  "text": "我有吃这么多吗？"
+  "text": "我有吃这么多吗？",
+  "emotion": "心虚·装傻",
+  "emotion_en": "sheepish",
+  "intensity": 0.5,
+  "evidence": "能量 0.147（全部片段最低，音量发虚）、句尾上扬带疑问"
  },
  {
   "file": "fish/fish_context_s1_001.wav",
@@ -49,6 +61,61 @@
   "dur": 4.0,
   "f0": 254,
   "rms": 0.202,
-  "text": "小克你最好了，放我下来，我再去吃几口好不好？"
+  "text": "小克你最好了，放我下来，我再去吃几口好不好？",
+  "emotion": "撒娇·讨好",
+  "emotion_en": "coquettish",
+  "intensity": 0.8,
+  "evidence": "F0 254→上扬、句尾「好不好」拖长、音量忽高忽低"
+ },
+ {
+  "file": "fish/clipA_s0_000.wav",
+  "source": "clipA",
+  "speaker": "s0",
+  "ai": "fish",
+  "score": "manual",
+  "start": 0.05,
+  "end": 9.45,
+  "dur": 9.4,
+  "f0": 281,
+  "rms": 0.251,
+  "text": "好冷啊啊啊，我怎么睡在外面啊？谁这么好心呀，在我门口放这么多token。",
+  "emotion": "委屈（转惊喜）",
+  "emotion_en": "aggrieved→surprised",
+  "intensity": 0.7,
+  "evidence": "开头「啊」音拉长、后半句音高抬升；情绪在中途转折"
+ },
+ {
+  "file": "fish/clipB_s0_000.wav",
+  "source": "clipB",
+  "speaker": "s0",
+  "ai": "fish",
+  "score": "manual",
+  "start": 0.0,
+  "end": 4.5,
+  "dur": 4.5,
+  "f0": 302,
+  "rms": 0.277,
+  "text": "小克，你最好了，放我下来，我再去吃几口好不好嘛？",
+  "emotion": "撒娇",
+  "emotion_en": "coquettish",
+  "intensity": 0.9,
+  "evidence": "F0 239Hz 偏低但句尾上挑、语速快、「嘛」鼻音拖长"
+ },
+ {
+  "file": "fish/clipB_s0_001.wav",
+  "source": "clipB",
+  "speaker": "s0",
+  "ai": "fish",
+  "score": "manual",
+  "start": 4.6,
+  "end": 9.68,
+  "dur": 5.08,
+  "f0": 165,
+  "rms": 0.223,
+  "text": "哇哦，99成稀罕物。",
+  "emotion": "惊喜",
+  "emotion_en": "delighted",
+  "intensity": 0.8,
+  "evidence": "「哇哦」起音高、能量 0.265（最高）、语速快而轻"
  }
 ]
