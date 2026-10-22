@@ -163,8 +163,12 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
   console.log('[2] 赔率计算');
   /* 卡片按创建时间倒序（q-d 最新在最前），必须定位到 q-a 的卡片 */
   const cardA = w.document.querySelector('[data-stake="q-a"]').closest('.q-card');
-  const oddsYes = cardA.querySelector('.outcome-row .outcome-odds').textContent;
-  check('彩池赔率 yes≈1.81', Math.abs(parseFloat(oddsYes) - 1.81) < 0.02);
+  /* 概率化改造后：卡片主显隐含概率（= 1−抽水 ÷ 赔率），赔率退到 title */
+  const oddsCell = cardA.querySelector('.outcome-row .outcome-odds');
+  const pctYes = parseInt(oddsCell.textContent, 10);
+  const expectPct = Math.round((1 - 0.05) / 1.81 * 100);
+  check('卡片主显概率 yes≈' + expectPct + '%', Math.abs(pctYes - expectPct) <= 1);
+  check('赔率退到 title 且为 1.81x', /1\.81x/.test(oddsCell.getAttribute('title') || ''));
 
   /* ---------- [3] 下注 ---------- */
   console.log('[3] 下注');
@@ -1097,6 +1101,47 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
   await sleep(10);
   check('排序切换不报错且列表仍在', $(w, 'question-list').innerHTML.indexOf('q-card') !== -1 ||
     $(w, 'question-list').innerHTML.indexOf('暂无') !== -1 || $(w, 'question-list').innerHTML.indexOf('没有') !== -1);
+
+  /* ---------- [20] 建题审核闸门（v1.3） ---------- */
+  console.log('[20] 建题审核闸门');
+  const C20 = w.OnlineCore;
+  const myUid = (me(w)[0] || {}).uid || 'u-me';
+  const draftQ = {
+    qid: 'q-draft', title: '【待审】测试题', status: 'review', deadline: '2099-01-01', fee: 0.05,
+    mode: 'pool', outcomes: [{ id: 'yes', label: '会' }, { id: 'no', label: '不会' }],
+    pool: { yes: 0, no: 0 }, category: '测试', creator_uid: myUid, creator_name: '我'
+  };
+  const rejectedQ = Object.assign({}, draftQ, {
+    qid: 'q-rej', title: '【驳回】测试题', status: 'rejected', review_note: '结果不可验证'
+  });
+  check('待审题不进公开大厅', C20.visibleQuestions([draftQ], { isAdmin: false }).length === 0);
+  check('待审题也不进大厅（站长走审核队列）', C20.visibleQuestions([draftQ], { isAdmin: true }).length === 0);
+  check('驳回题不进公开大厅', C20.visibleQuestions([rejectedQ], { isAdmin: false }).length === 0);
+  check('zoneOf 待审=review', C20.zoneOf(draftQ) === 'review');
+  check('zoneOf 驳回=rejected', C20.zoneOf(rejectedQ) === 'rejected');
+
+  /* 塞进库 → 刷新 → 大厅看不到、我的建题看得到 */
+  w.__fakeDB._tables.jp_questions.push(draftQ, rejectedQ);
+  w.document.dispatchEvent(new w.Event('visibilitychange'));
+  await sleep(120);
+  click(w, w.document.querySelector('[data-view="hall"]'));
+  await sleep(30);
+  const hallHTML = $(w, 'question-list').innerHTML;
+  check('大厅不渲染待审题', hallHTML.indexOf('【待审】测试题') === -1);
+  check('大厅不渲染驳回题', hallHTML.indexOf('【驳回】测试题') === -1);
+  const draftsHTML = $(w, 'my-drafts').innerHTML;
+  check('我的建题显示待审核', draftsHTML.indexOf('待审核') !== -1);
+  check('我的建题显示驳回理由', draftsHTML.indexOf('结果不可验证') !== -1);
+
+  /* 模拟放行：状态转 open 后应立刻出现在大厅 */
+  const dq = w.__fakeDB._tables.jp_questions.find(x => x.qid === 'q-draft');
+  dq.status = 'open'; dq.review_note = null;
+  w.document.dispatchEvent(new w.Event('visibilitychange'));
+  await sleep(120);
+  click(w, w.document.querySelector('[data-view="hall"]'));
+  await sleep(30);
+  check('放行后进入大厅', $(w, 'question-list').innerHTML.indexOf('【待审】测试题') !== -1);
+  check('放行后从我的建题消失', $(w, 'my-drafts').innerHTML.indexOf('【待审】测试题') === -1);
 
   console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

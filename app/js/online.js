@@ -121,6 +121,33 @@ var OnlineCore = (function () {
     return { odds: odds, pools: r.pools, total: r.total };
   }
 
+  /* 隐含概率：彩池 = 选项池 ÷ 总池；固定赔率 = (1/赔率) 归一化。
+     池子为空时返回 null（前端显示「—」），不要假装 50%。 */
+  function probabilities(q, bets) {
+    var cur = currentOdds(q, bets);
+    var prob = {};
+    if (q.mode === 'fixed') {
+      var inv = 0;
+      q.outcomes.forEach(function (o) { inv += 1 / Math.max(1.01, Number(o.fixedOdds) || 1); });
+      q.outcomes.forEach(function (o) {
+        prob[o.id] = inv > 0 ? (1 / Math.max(1.01, Number(o.fixedOdds) || 1)) / inv : null;
+      });
+      return prob;
+    }
+    var total = cur.total || 0;
+    q.outcomes.forEach(function (o) {
+      prob[o.id] = total > 0 ? (cur.pools[o.id] || 0) / total : null;
+    });
+    return prob;
+  }
+
+  /* 概率文案：25% / <1% / — */
+  function probText(p) {
+    if (p === null || p === undefined || !isFinite(p)) return '—';
+    if (p > 0 && p < 0.005) return '<1%';
+    return Math.round(p * 100) + '%';
+  }
+
   function potentialPayout(q, bets, oid, stake) {
     if (q.mode === 'fixed') {
       var o = q.outcomes.filter(function (x) { return x.id === oid; })[0];
@@ -186,6 +213,8 @@ var OnlineCore = (function () {
 
   /* 大厅分区：open 进行中 / search 待平台检索 / voting 公投中 / manual 待人工揭晓 / settled 已揭晓 */
   function zoneOf(q, now) {
+    if (q.status === 'review') return 'review';
+    if (q.status === 'rejected') return 'rejected';
     if (q.status === 'settled') return 'settled';
     if (!isExpired(q, now)) return 'open';
     if (settleModeOf(q) === 'vote') return 'voting';
@@ -219,6 +248,9 @@ var OnlineCore = (function () {
   function visibleQuestions(questions, opts) {
     opts = opts || {};
     return (questions || []).filter(function (q) {
+      /* 待审与驳回的题不进大厅（含站长视角）：站长在「建题审核」队列处理，
+         建题人自己的在「我的建题」面板看，避免同一道题两处出现 */
+      if (q.status === 'review' || q.status === 'rejected') return false;
       return opts.isAdmin ? true : !q.hidden;
     });
   }
@@ -263,7 +295,8 @@ var OnlineCore = (function () {
     OPENING_BONUS: OPENING_BONUS, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     settingsFromRows: settingsFromRows, normalizeSettings: normalizeSettings,
     effectiveBonus: effectiveBonus,
-    poolOf: poolOf, currentOdds: currentOdds, potentialPayout: potentialPayout,
+    poolOf: poolOf, currentOdds: currentOdds, probabilities: probabilities,
+    probText: probText, potentialPayout: potentialPayout,
     settleOdds: settleOdds, isExpired: isExpired, phaseOf: phaseOf, dayDiffLabel: dayDiffLabel,
     settleModeOf: settleModeOf, isVotingOpen: isVotingOpen, voteClosed: voteClosed,
     zoneOf: zoneOf, ZONE_LABELS: ZONE_LABELS, SETTLE_LABELS: SETTLE_LABELS,
@@ -935,7 +968,9 @@ var OnlineApp = (function () {
         deadline: deadline, outcomes: outcomes, pool: pool,
         settle_mode: settleMode, vote_end: settleMode === 'vote' ? voteEnd : null,
         category: ($('q-cat') ? $('q-cat').value : '') || '未分类',
-        creator_uid: state.uid, creator_name: state.nickname
+        creator_uid: state.uid, creator_name: state.nickname,
+        /* 审核闸门：站长的题直接上架，普通用户的题先进入待审 */
+        status: state.adminUnlocked ? 'open' : 'review'
       }).then(function (r) {
         if (r.error) throw new Error(r.error.message || '创建失败');
         $('q-title').value = ''; $('q-desc').value = ''; $('q-outcomes').value = ''; $('q-odds').value = '';
@@ -1185,10 +1220,14 @@ var OnlineApp = (function () {
 
   function renderHall() {
     renderHallTabs();
+    renderMyDrafts();
     var list = $('question-list');
     if (!list) return;
-    var byZone = { open: [], search: [], voting: [], manual: [], settled: [] };
-    hallQuestions().forEach(function (q) { byZone[OnlineCore.zoneOf(q)].push(q); });
+    var byZone = { open: [], search: [], voting: [], manual: [], settled: [], review: [], rejected: [] };
+    hallQuestions().forEach(function (q) {
+      var z = OnlineCore.zoneOf(q);
+      (byZone[z] || byZone.open).push(q);
+    });
 
     /* 当前分区失效（被筛空/切换）时回到进行中 */
     if (!byZone[state.hallTab]) state.hallTab = 'open';
@@ -1324,7 +1363,9 @@ var OnlineApp = (function () {
       catKeys.map(function (c) {
         return '<button class="chip' + (state.hallCat === c ? ' active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + ' ' + cats[c] + '</button>';
       }).join('') +
-      '</div></div>';
+      '</div>' +
+      '<p class="hint">百分比 = 市场认为该选项发生的概率（彩池占比）。悬停看对应赔率。</p>' +
+      '</div>';
     box.innerHTML = html;
     on('hall-sort', 'change', function () { state.hallSort = $('hall-sort').value; renderHall(); });
     on('hall-time', 'change', function () { state.hallTime = $('hall-time').value; renderHall(); });
@@ -1386,7 +1427,7 @@ var OnlineApp = (function () {
         '<span class="q-cat">' + esc(catOf(q)) + '</span>' +
         '<span class="q-settle-mode">' + esc(OnlineCore.SETTLE_LABELS[OnlineCore.settleModeOf(q)]) + '</span>' +
         '<span class="q-deadline">截止 ' + esc(q.deadline) + '</span>' +
-        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池赔率 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
         (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
         '</div>' +
         '<div class="q-title">' + esc(q.title) + '</div>' +
@@ -1444,7 +1485,7 @@ var OnlineApp = (function () {
       '<span class="q-settle-mode" title="揭晓方式">' + esc(OnlineCore.SETTLE_LABELS[mode]) + '</span>' +
       (zone === 'voting' && OnlineCore.voteClosed(q) ? '<span class="q-status expired">公投已结束 · 待结算</span>' : '') +
       (q.deadline ? '<span class="q-deadline" data-countdown="' + q.qid + '">' + esc(OnlineCore.dayDiffLabel(q)) + '</span>' : '') +
-      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池赔率 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
       (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
       (q.pinned ? '<span class="q-status pinned">置顶</span>' : '') +
       (q.hidden && state.adminUnlocked ? '<span class="q-status hidden">已下架</span>' : '') +
@@ -1457,17 +1498,19 @@ var OnlineApp = (function () {
       })() +
       '</div>';
 
+    var probs = OnlineCore.probabilities(q, state.bets);
     var outcomes = '<div class="q-outcomes">' + q.outcomes.map(function (o) {
       var cls = settled ? (o.id === q.result ? 'win' : 'dim') : '';
+      var oddsVal = cur.odds[o.id] ? cur.odds[o.id].toFixed(2) + 'x' : '—';
       var oddsTxt = settled && o.id === q.result
-        ? '最终 ' + (q.final_odds ? Number(q.final_odds).toFixed(2) : '—')
-        : (cur.odds[o.id] ? cur.odds[o.id].toFixed(2) : '—');
+        ? '最终 ' + (q.final_odds ? Number(q.final_odds).toFixed(2) + 'x' : '—')
+        : OnlineCore.probText(probs[o.id]);
       var poolTxt = cur.pools ? '池 ' + Math.round(cur.pools[o.id]).toLocaleString() : '';
       var radio = (settled || expired) ? '' :
         '<input type="radio" name="q-' + q.qid + '" value="' + o.id + '">';
       return '<label class="outcome-row ' + cls + '">' + radio +
         '<span class="outcome-label">' + esc(o.label) + '</span>' +
-        '<span class="outcome-odds">' + oddsTxt + '</span>' +
+        '<span class="outcome-odds" title="赔率 ' + esc(oddsVal) + '">' + oddsTxt + '</span>' +
         '<span class="outcome-pool">' + poolTxt + '</span></label>';
     }).join('') + '</div>';
 
@@ -1606,7 +1649,8 @@ var OnlineApp = (function () {
         if (!sel || !pot) return;
         var stake = Math.floor(Number(input.value) || 0);
         pot.textContent = stake >= state.settings.site.min_bet
-          ? OnlineCore.potentialPayout(q, state.bets, sel.value, stake).toFixed(1) + ' 分' : '—';
+          ? OnlineCore.potentialPayout(q, state.bets, sel.value, stake).toFixed(1) + ' 分' +
+            '（当前 ' + OnlineCore.probText(OnlineCore.probabilities(q, state.bets)[sel.value]) + '）' : '—';
       }
       input.addEventListener('input', update);
       update();
@@ -1775,7 +1819,7 @@ var OnlineApp = (function () {
         '<div class="index-bar"><div class="index-bar-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="index-row-meta hint">「' + esc(first.label) + '」的市场概率 · 彩池 ' +
         Math.round(r.total).toLocaleString() + ' 分 · 赔率 ' +
-        (r.odds[first.id] ? r.odds[first.id].toFixed(2) : '—') +
+        (r.odds[first.id] ? r.odds[first.id].toFixed(2) + 'x' : '—') +
         (r.q.deadline ? ' · ' + esc(OnlineCore.dayDiffLabel(r.q)) : '') + '</div>' +
         '</div>';
     });
@@ -3268,6 +3312,7 @@ var OnlineApp = (function () {
     gate.style.display = 'none';
     body.style.display = '';
     renderAdminStats();
+    renderAdminReview();
     renderAdminPending();
     renderAdminLoans();
     renderAdminDebates();
@@ -3428,6 +3473,90 @@ var OnlineApp = (function () {
       chain = chain.then(function () { loadPrizePool().then(function () { renderAll(); }); });
       return chain;
     });
+  }
+
+  /* 建题审核：普通用户的题先进 review，站长在此放行或驳回 */
+  function renderAdminReview() {
+    var box = $('admin-review');
+    if (!box) return;
+    var waiting = OnlineCore.sortQuestions(state.questions).filter(function (q) {
+      return q.status === 'review';
+    });
+    var title = '<div class="card-title">建题审核（' + waiting.length + '）</div>';
+    if (!waiting.length) {
+      box.innerHTML = title + '<div class="q-empty">没有待审的题目。普通用户新提交的题会出现在这里。</div>';
+      return;
+    }
+    var html = title +
+      '<p class="hint">放行后题目立即进入大厅并可被投注；驳回需填理由，建题人在「我的建题」里能看到。' +
+      '放行前请确认：结果可验证、信源明确、截止时间合理。</p>';
+    waiting.forEach(function (q) {
+      html += '<div class="pending-item">' +
+        '<div class="pending-title">' + esc(q.title) + '</div>' +
+        '<div class="pending-meta">' + esc(q.creator_name || '匿名') +
+        ' · 截止 ' + esc(q.deadline || '无') +
+        ' · ' + esc(catOf(q)) +
+        ' · ' + (q.mode === 'fixed' ? '固定赔率' : '彩池 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') +
+        ' · ' + esc(OnlineCore.SETTLE_LABELS[OnlineCore.settleModeOf(q)]) + '</div>' +
+        (q.descr ? '<div class="pending-meta">说明：' + esc(q.descr) + '</div>' : '') +
+        '<div class="pending-meta">选项：' + q.outcomes.map(function (o) { return esc(o.label); }).join(' / ') + '</div>' +
+        '<div class="pending-actions">' +
+        '<button class="btn btn-primary" style="width:auto" data-approve="' + esc(q.qid) + '">放行</button>' +
+        '<button class="btn" style="width:auto" data-reject="' + esc(q.qid) + '">驳回</button>' +
+        '</div></div>';
+    });
+    box.innerHTML = html;
+
+    Array.prototype.forEach.call(box.querySelectorAll('[data-approve]'), function (b) {
+      b.addEventListener('click', function () {
+        var q = findQuestion(b.getAttribute('data-approve'));
+        if (!q || !confirm('放行「' + q.title + '」？放行后立即进入大厅并可被投注。')) return;
+        withCloud(function () {
+          return cloud.database.from('jp_questions')
+            .update({ status: 'open', review_note: null })
+            .eq('qid', q.qid).then(check);
+        });
+      });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-reject]'), function (b) {
+      b.addEventListener('click', function () {
+        var q = findQuestion(b.getAttribute('data-reject'));
+        if (!q) return;
+        var note = prompt('驳回「' + q.title + '」的理由（建题人会看到）：');
+        if (note === null) return;
+        note = (note || '').trim();
+        if (!note) { alert('必须填写驳回理由'); return; }
+        withCloud(function () {
+          return cloud.database.from('jp_questions')
+            .update({ status: 'rejected', review_note: note })
+            .eq('qid', q.qid).then(check);
+        });
+      });
+    });
+  }
+
+  /* 我的建题：本人待审 / 被驳回的题目（不进公开大厅） */
+  function renderMyDrafts() {
+    var box = $('my-drafts');
+    if (!box) return;
+    if (!state.uid) { box.innerHTML = ''; return; }
+    var mine = state.questions.filter(function (q) {
+      return q.creator_uid === state.uid && (q.status === 'review' || q.status === 'rejected');
+    });
+    if (!mine.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="card"><div class="card-title">我的建题 · 待审 / 被驳回（' + mine.length + '）</div>' +
+      '<p class="hint">普通用户建题需站长审核后才会进入大厅；被驳回的可以修改后重新提交。</p>' +
+      mine.map(function (q) {
+        var isReview = q.status === 'review';
+        return '<div class="pending-item">' +
+          '<div class="pending-title">' + esc(q.title) +
+          ' <span class="q-status ' + (isReview ? 'open' : 'expired') + '">' +
+          (isReview ? '待审核' : '已驳回') + '</span></div>' +
+          '<div class="pending-meta">截止 ' + esc(q.deadline || '无') + ' · ' + esc(catOf(q)) +
+          ' · ' + q.outcomes.map(function (o) { return esc(o.label); }).join(' / ') + '</div>' +
+          (q.review_note ? '<div class="pending-meta">驳回理由：' + esc(q.review_note) + '</div>' : '') +
+          '</div>';
+      }).join('') + '</div>';
   }
 
   /* 待平台检索 / 待揭晓队列 + AI 辅助判定 */
