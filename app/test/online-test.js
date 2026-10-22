@@ -125,7 +125,7 @@ function boot(seedBets) {
   w.confirm = () => true;
   w.__fakeDB = fake;
   w.WorkBuddyCloud = { createWorkBuddyCloud: () => ({ database: fake }) };
-  ['js/sha256.js', 'js/loans.js', 'js/badges.js', 'js/debates.js', 'js/evidence.js', 'js/arbitration.js', 'js/oddscurve.js', 'js/betting.js', 'js/online.js'].forEach(f => {
+  ['js/sha256.js', 'js/loans.js', 'js/badges.js', 'js/debates.js', 'js/evidence.js', 'js/arbitration.js', 'js/oddscurve.js', 'js/lmsr.js', 'js/betting.js', 'js/online.js'].forEach(f => {
     w.eval(fs.readFileSync(path.join(APP, f), 'utf8'));
   });
   return w;
@@ -1142,6 +1142,97 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
   await sleep(30);
   check('放行后进入大厅', $(w, 'question-list').innerHTML.indexOf('【待审】测试题') !== -1);
   check('放行后从我的建题消失', $(w, 'my-drafts').innerHTML.indexOf('【待审】测试题') === -1);
+
+  /* ---------- [21] LMSR 份额市场：定价、持仓、净资产守恒 ---------- */
+  console.log('[21] LMSR 份额市场');
+  const L21 = w.LmsrCore, C21 = w.OnlineCore, LC21 = w.LoanCore;
+  check('LmsrCore 已加载', !!L21);
+  const qL = {
+    qid: 'q-lmsr', title: '【试点】份额市场题', mode: 'lmsr', fee: 0.05,
+    status: 'open', deadline: '2099-01-01', lmsr: { b: 500, q0: {} },
+    outcomes: [{ id: 'yes', label: '会' }, { id: 'no', label: '不会' }]
+  };
+  const prob0 = C21.probabilities(qL, []);
+  check('空仓价格 50/50', Math.abs(prob0.yes - 0.5) < 1e-6);
+  check('空仓不显示假概率（有 q0 时为真实价格）', C21.probText(prob0.yes) === '50%');
+
+  /* 模拟一笔买入：100 份，成本按曲线算 */
+  const r1 = L21.buy([0, 0], 500, 0, 100);
+  const betBuy = { id: 9001, qid: 'q-lmsr', uid: 'u-me', nickname: '我', outcome_id: 'yes',
+    stake: Math.round((r1.cost + r1.fee) * 100) / 100, shares: 100, kind: 'buy', status: 'open' };
+  const bets1 = [betBuy];
+  const prob1 = C21.probabilities(qL, bets1);
+  check('买入 100 份后价格 ≈55%', Math.abs(prob1.yes - r1.priceAfter) < 1e-6 && prob1.yes > 0.54);
+  check('赔率与价格互为倒数', Math.abs(C21.currentOdds(qL, bets1).odds.yes - 1 / prob1.yes) < 0.01);
+
+  /* 持仓与在押：成本口径 */
+  const pos1 = C21.lmsrPositionOf(qL, bets1, 'u-me');
+  check('持仓 100 份', Math.floor(pos1.yes.shares) === 100);
+  check('持仓成本 = 实付', Math.abs(pos1.yes.cost - betBuy.stake) < 0.02);
+  check('在押 = 成本（不含浮盈）', Math.abs(LC21.openStakeOf('u-me', bets1) - betBuy.stake) < 0.02);
+  const nw1 = LC21.netWorthOf('u-me', bets1, [], [], SETTINGS);
+  check('买入后净资产守恒 = 1000', Math.abs(nw1 - 1000) < 0.02, String(nw1));
+
+  /* 卖出一半：在押按剩余成本，现金增加回收额 */
+  const r2 = L21.sell([100, 0], 500, 0, 50);
+  const betSell = { id: 9002, qid: 'q-lmsr', uid: 'u-me', nickname: '我', outcome_id: 'yes',
+    stake: -Math.round((r2.proceeds - r2.fee) * 100) / 100, shares: 50, kind: 'sell', status: 'open' };
+  const bets2 = [betBuy, betSell];
+  const halfCost = betBuy.stake * 0.5;
+  check('卖出后在押 = 剩余一半成本', Math.abs(LC21.openStakeOf('u-me', bets2) - halfCost) < 0.02,
+    LC21.openStakeOf('u-me', bets2) + ' vs ' + halfCost);
+  const nw2 = LC21.netWorthOf('u-me', bets2, [], [], SETTINGS);
+  const realized = Math.abs(betSell.stake) - halfCost;
+  check('卖出后净资产 = 1000 + 已实现盈亏', Math.abs(nw2 - (1000 + realized)) < 0.05,
+    nw2 + ' vs ' + (1000 + realized).toFixed(2));
+  const pos2 = C21.lmsrPositionOf(qL, bets2, 'u-me');
+  check('持仓剩 50 份', Math.floor(pos2.yes.shares) === 50);
+
+  /* 结算：赢家每份 1 分，持仓行离场 */
+  const settleRow = { id: 9003, qid: 'q-lmsr', uid: 'u-me', outcome_id: 'yes',
+    stake: 0, shares: 0, payout: 50, kind: 'settle', status: 'won' };
+  const bets3 = [
+    Object.assign({}, betBuy, { status: 'settled' }),
+    Object.assign({}, betSell, { status: 'settled' }),
+    settleRow
+  ];
+  check('结算后在押归零', LC21.openStakeOf('u-me', bets3) === 0);
+  const nw3 = LC21.netWorthOf('u-me', bets3, [], [], SETTINGS);
+  const expectCash = 1000 - betBuy.stake + Math.abs(betSell.stake) + 50;
+  check('结算后净资产 = 现金', Math.abs(nw3 - expectCash) < 0.05, nw3 + ' vs ' + expectCash.toFixed(2));
+
+  /* DOM：份额市场题应出现买入按钮，且没有彩池的"确认下注" */
+  const lmsrQ = Object.assign({}, qL, {
+    qid: 'q-lmsr-dom', creator_uid: 'u-other', pool: {}, settle_mode: 'manual'
+  });
+  w.__fakeDB._tables.jp_questions.push(lmsrQ);
+  w.document.dispatchEvent(new w.Event('visibilitychange'));
+  await sleep(120);
+  click(w, w.document.querySelector('[data-view="hall"]'));
+  await sleep(30);
+  const cardL = w.document.querySelector('[data-stake="q-lmsr-dom"]') ||
+                w.document.querySelector('[data-lmsr-buy="q-lmsr-dom"]');
+  const cardBox = cardL ? cardL.closest('.q-card') : null;
+  check('份额市场卡片出现买入按钮', !!w.document.querySelector('[data-lmsr-buy="q-lmsr-dom"]'));
+  check('份额市场不显示彩池下注按钮', !w.document.querySelector('[data-bet="q-lmsr-dom"]'));
+  check('份额市场显示模式标签', !!cardBox && cardBox.innerHTML.indexOf('份额市场') !== -1);
+
+  /* 端到端：点买入 → 落库一条 kind='buy' 且有 shares */
+  const radioL = w.document.querySelector('input[name="q-q-lmsr-dom"][value="yes"]');
+  if (radioL) {
+    radioL.checked = true;
+    radioL.dispatchEvent(new w.Event('change', { bubbles: true }));
+  }
+  const buyBtn = w.document.querySelector('[data-lmsr-buy="q-lmsr-dom"]');
+  click(w, buyBtn);
+  await sleep(150);
+  const buys = w.__fakeDB._tables.jp_bets.filter(b => b.qid === 'q-lmsr-dom' && b.kind === 'buy');
+  check('买入写入流水', buys.length === 1);
+  check('流水带份额与成本', !!buys[0] && buys[0].shares > 0 && buys[0].stake > 0,
+    buys[0] ? ('shares=' + buys[0].shares + ' stake=' + buys[0].stake) : 'no row');
+  const priceAfterBuy = w.OnlineCore.probabilities(w.OnlineCore.sortQuestions(w.__fakeDB._tables.jp_questions)
+    .filter(x => x.qid === 'q-lmsr-dom')[0], w.__fakeDB._tables.jp_bets).yes;
+  check('买入后价格上行', priceAfterBuy > 0.5, String(priceAfterBuy));
 
   console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

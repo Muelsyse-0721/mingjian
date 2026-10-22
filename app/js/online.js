@@ -90,6 +90,65 @@ var OnlineCore = (function () {
     return isFinite(Number(s.opening_bonus)) ? Number(s.opening_bonus) : OPENING_BONUS;
   }
 
+  /* ---------- LMSR（份额化试点） ---------- */
+  /* q 不落库：由建题时的 q0 加上所有买卖份额推导，和彩池"池子由流水推导"同一原则 */
+  function lmsrConfig(q) {
+    var cfg = (q && q.lmsr) || {};
+    return {
+      b: Number(cfg.b) > 0 ? Number(cfg.b) : (typeof LmsrCore !== 'undefined' ? LmsrCore.DEFAULTS.b : 500),
+      q0: cfg.q0 || {}
+    };
+  }
+
+  function lmsrStateOf(q, bets) {
+    var cfg = lmsrConfig(q);
+    var ids = (q.outcomes || []).map(function (o) { return o.id; });
+    var qv = ids.map(function (id) { return Number(cfg.q0[id] || 0); });
+    (bets || []).forEach(function (b) {
+      if (b.qid !== q.qid) return;
+      if (b.kind !== 'buy' && b.kind !== 'sell') return;
+      var i = ids.indexOf(b.outcome_id);
+      if (i < 0) return;
+      var sh = Math.abs(Number(b.shares || 0));
+      qv[i] += (b.kind === 'buy' ? sh : -sh);
+    });
+    var prices = (typeof LmsrCore !== 'undefined') ? LmsrCore.prices(qv, cfg.b) : ids.map(function () { return 0; });
+    return { q: qv, b: cfg.b, prices: prices, ids: ids };
+  }
+
+  /* 我的持仓：份额 / 成本 / 已卖出回收 / 现值 / 浮动盈亏 */
+  function lmsrPositionOf(q, bets, uid) {
+    var st = lmsrStateOf(q, bets);
+    var pos = {};
+    q.outcomes.forEach(function (o, i) {
+      pos[o.id] = { shares: 0, buyShares: 0, buyCost: 0, soldShares: 0, soldProceeds: 0,
+        cost: 0, price: st.prices[i] || 0, value: 0, pnl: 0 };
+    });
+    (bets || []).forEach(function (b) {
+      if (b.qid !== q.qid || b.uid !== uid) return;
+      if (b.kind !== 'buy' && b.kind !== 'sell') return;
+      var p = pos[b.outcome_id];
+      if (!p) return;
+      var sh = Number(b.shares || 0);
+      var abs = Math.abs(sh);
+      if (b.kind === 'buy') { p.buyShares += abs; p.buyCost += Number(b.stake || 0); }
+      else { p.soldShares += abs; p.soldProceeds += Math.abs(Number(b.stake || 0)); }
+    });
+    var totalCost = 0, totalValue = 0, totalSold = 0;
+    Object.keys(pos).forEach(function (k) {
+      var p = pos[k];
+      p.shares = Math.max(0, p.buyShares - p.soldShares);
+      p.cost = p.buyShares > 0 ? p.buyCost * (p.shares / p.buyShares) : 0;
+      p.value = p.shares * p.price;
+      p.pnl = p.value + p.soldProceeds - p.buyCost;
+      totalCost += p.cost; totalValue += p.value; totalSold += p.soldProceeds;
+    });
+    function r2(x) { return Math.round(x * 100) / 100; }
+    pos._total = { cost: r2(totalCost), value: r2(totalValue), sold: r2(totalSold),
+      shares: Object.keys(pos).reduce(function (s, k) { return k === '_total' ? s : s + pos[k].shares; }, 0) };
+    return pos;
+  }
+
   /* ---------- 赔率 ---------- */
   function poolOf(q, bets) {
     var pools = {}, total = 0;
@@ -110,6 +169,14 @@ var OnlineCore = (function () {
 
   function currentOdds(q, bets) {
     var odds = {};
+    if (q.mode === 'lmsr') {
+      var st0 = lmsrStateOf(q, bets);
+      q.outcomes.forEach(function (o, i) {
+        var p = st0.prices[i] || 0;
+        odds[o.id] = p > 0 ? Math.round((1 / p) * 100) / 100 : 0;
+      });
+      return { odds: odds, pools: null, total: null, lmsr: st0 };
+    }
     if (q.mode === 'fixed') {
       q.outcomes.forEach(function (o) { odds[o.id] = o.fixedOdds; });
       return { odds: odds, pools: null, total: null };
@@ -126,6 +193,16 @@ var OnlineCore = (function () {
   function probabilities(q, bets) {
     var cur = currentOdds(q, bets);
     var prob = {};
+    if (q.mode === 'lmsr') {
+      var st = lmsrStateOf(q, bets);
+      var seen = false;
+      q.outcomes.forEach(function (o, i) {
+        prob[o.id] = st.prices[i];
+        if (st.prices[i] > 0) seen = true;
+      });
+      if (!seen) q.outcomes.forEach(function (o) { prob[o.id] = null; });
+      return prob;
+    }
     if (q.mode === 'fixed') {
       var inv = 0;
       q.outcomes.forEach(function (o) { inv += 1 / Math.max(1.01, Number(o.fixedOdds) || 1); });
@@ -149,6 +226,14 @@ var OnlineCore = (function () {
   }
 
   function potentialPayout(q, bets, oid, stake) {
+    if (q.mode === 'lmsr') {
+      /* 给定金额能买到多少份 → 命中即每份 1 分 */
+      var st = lmsrStateOf(q, bets);
+      var i = q.outcomes.map(function (o) { return o.id; }).indexOf(oid);
+      if (i < 0 || typeof LmsrCore === 'undefined') return 0;
+      var sh = LmsrCore.maxShares(st.q, st.b, i, Number(stake) || 0);
+      return sh;
+    }
     if (q.mode === 'fixed') {
       var o = q.outcomes.filter(function (x) { return x.id === oid; })[0];
       return stake * (o ? o.fixedOdds : 0);
@@ -297,6 +382,7 @@ var OnlineCore = (function () {
     effectiveBonus: effectiveBonus,
     poolOf: poolOf, currentOdds: currentOdds, probabilities: probabilities,
     probText: probText, potentialPayout: potentialPayout,
+    lmsrConfig: lmsrConfig, lmsrStateOf: lmsrStateOf, lmsrPositionOf: lmsrPositionOf,
     settleOdds: settleOdds, isExpired: isExpired, phaseOf: phaseOf, dayDiffLabel: dayDiffLabel,
     settleModeOf: settleModeOf, isVotingOpen: isVotingOpen, voteClosed: voteClosed,
     zoneOf: zoneOf, ZONE_LABELS: ZONE_LABELS, SETTLE_LABELS: SETTLE_LABELS,
@@ -667,6 +753,75 @@ var OnlineApp = (function () {
   }
 
   /* ---------- 动作：投注 ---------- */
+  /* ---------- LMSR 买卖 ---------- */
+  /* 用金额买入：份额由定价曲线反算，用户实付 = 成交额 + 抽水 */
+  function buyLmsr(qid, oid, budget) {
+    var q = findQuestion(qid);
+    if (!q || q.status !== 'open') { alert('问题已揭晓或不存在'); return; }
+    if (OnlineCore.isExpired(q)) { alert('已过截止日期，等待揭晓'); return; }
+    if (!state.settings.site.accept_new_bets || state.settings.site.maintenance) { alert('当前暂停交易'); return; }
+    budget = Math.floor(Number(budget));
+    var minBet = state.settings.site.min_bet;
+    if (!(budget >= minBet)) { alert('投入至少 ' + minBet + ' 分'); return; }
+    if (budget > Math.floor(totalPoints())) { alert('积分不足：当前可用 ' + Math.floor(totalPoints()) + ' 分'); return; }
+    if (typeof LmsrCore === 'undefined') { alert('定价模块未加载'); return; }
+
+    var st = OnlineCore.lmsrStateOf(q, state.bets);
+    var idx = q.outcomes.map(function (o) { return o.id; }).indexOf(oid);
+    if (idx < 0) return;
+    var lcfg = OnlineCore.lmsrConfig(q);
+    /* 先按预算估份额，再算真实成本；抽水单独加在实付上 */
+    var shares = LmsrCore.maxShares(st.q, st.b, idx, budget * 0.97, { fee: q.fee, minPrice: lcfg.minPrice, maxPrice: lcfg.maxPrice });
+    if (shares < 1) { alert('金额太小，买不到 1 份'); return; }
+    var r = LmsrCore.buy(st.q, st.b, idx, shares, { fee: q.fee });
+    if (r.error) { alert(r.error); return; }
+    var pay = Math.round((r.cost + r.fee) * 100) / 100;
+    if (pay > budget) { shares = Math.max(1, Math.floor(shares * budget / pay)); r = LmsrCore.buy(st.q, st.b, idx, shares, { fee: q.fee }); pay = Math.round((r.cost + r.fee) * 100) / 100; }
+    if (r.error) { alert(r.error); return; }
+    if (!confirm('买入 ' + shares + ' 份「' + OnlineCore.outcomeLabelOf(q, oid) + '」？\n' +
+      '实付 ' + pay.toFixed(2) + ' 分（含抽水 ' + r.fee.toFixed(2) + '）\n' +
+      '成交后价格 ' + (r.priceAfter * 100).toFixed(1) + '%，命中每份兑 1 分')) return;
+
+    withCloud(function () {
+      return cloud.database.from('jp_bets').insert({
+        qid: qid, uid: state.uid, nickname: state.nickname,
+        outcome_id: oid, stake: pay, odds_at_bet: Math.round((1 / r.avgPrice) * 100) / 100,
+        shares: shares, price: Math.round(r.avgPrice * 1000) / 1000, kind: 'buy'
+      }).then(function (x) { if (x && x.error) throw new Error(x.error.message || '买入失败'); });
+    });
+  }
+
+  /* 卖出：按当前曲线结算，回收 = 卖出额 − 抽水 */
+  function sellLmsr(qid, oid, shares) {
+    var q = findQuestion(qid);
+    if (!q || q.status !== 'open') { alert('问题已揭晓或不存在'); return; }
+    if (OnlineCore.isExpired(q)) { alert('已过截止日期，不能卖出'); return; }
+    if (typeof LmsrCore === 'undefined') return;
+    var pos = OnlineCore.lmsrPositionOf(q, state.bets, state.uid);
+    var mine = pos[oid];
+    if (!mine || mine.shares < 1) { alert('你在这个选项上没有持仓'); return; }
+    shares = Math.floor(Number(shares) || mine.shares);
+    shares = Math.min(shares, Math.floor(mine.shares));
+    if (shares < 1) { alert('可卖份额不足 1 份'); return; }
+
+    var st = OnlineCore.lmsrStateOf(q, state.bets);
+    var idx = q.outcomes.map(function (o) { return o.id; }).indexOf(oid);
+    var r = LmsrCore.sell(st.q, st.b, idx, shares, { fee: q.fee });
+    if (r.error) { alert(r.error); return; }
+    var get = Math.round((r.proceeds - r.fee) * 100) / 100;
+    if (!confirm('卖出 ' + shares + ' 份「' + OnlineCore.outcomeLabelOf(q, oid) + '」？\n' +
+      '回收 ' + get.toFixed(2) + ' 分（已扣抽水 ' + r.fee.toFixed(2) + '）\n' +
+      '卖出后价格 ' + (r.priceAfter * 100).toFixed(1) + '%')) return;
+
+    withCloud(function () {
+      return cloud.database.from('jp_bets').insert({
+        qid: qid, uid: state.uid, nickname: state.nickname,
+        outcome_id: oid, stake: -get, odds_at_bet: Math.round((1 / r.avgPrice) * 100) / 100,
+        shares: shares, price: Math.round(r.avgPrice * 1000) / 1000, kind: 'sell'
+      }).then(function (x) { if (x && x.error) throw new Error(x.error.message || '卖出失败'); });
+    });
+  }
+
   function placeBet(qid, oid, stake) {
     var q = findQuestion(qid);
     if (!q || q.status !== 'open') { alert('问题已揭晓或不存在'); return; }
@@ -744,8 +899,62 @@ var OnlineApp = (function () {
     }
   }
 
+  /* LMSR 结算：赢家每份 1 分；平局退回剩余成本；结算后所有持仓行离场（不再计入在押） */
+  function doSettleLmsr(q, resultOid) {
+    var isDraw = resultOid === 'draw';
+    var st = OnlineCore.lmsrStateOf(q, state.bets);
+    var rows = state.bets.filter(function (b) {
+      return b.qid === q.qid && b.status === 'open' && (b.kind === 'buy' || b.kind === 'sell');
+    });
+    var pos = {};
+    rows.forEach(function (b) {
+      var k = b.uid + '|' + b.outcome_id;
+      var p = pos[k] || (pos[k] = { uid: b.uid, nickname: b.nickname, oid: b.outcome_id,
+        buyShares: 0, buyCost: 0, soldShares: 0 });
+      if (b.kind === 'buy') { p.buyShares += Math.abs(Number(b.shares || 0)); p.buyCost += Number(b.stake || 0); }
+      else { p.soldShares += Math.abs(Number(b.shares || 0)); }
+    });
+
+    var idx = q.outcomes.map(function (o) { return o.id; }).indexOf(resultOid);
+    var winPrice = idx >= 0 ? (st.prices[idx] || 0) : 1;
+    var finalOdds = isDraw ? 1 : (winPrice > 0 ? Math.round((1 / winPrice) * 100) / 100 : 1);
+    var payouts = [];
+    Object.keys(pos).forEach(function (k) {
+      var p = pos[k];
+      var remain = Math.max(0, p.buyShares - p.soldShares);
+      var costBasis = p.buyShares > 0 ? p.buyCost * (remain / p.buyShares) : 0;
+      var payout = isDraw ? costBasis : (p.oid === resultOid ? remain : 0);
+      if (payout > 0.005) payouts.push({ uid: p.uid, nickname: p.nickname, oid: p.oid,
+        shares: remain, payout: Math.round(payout * 100) / 100 });
+    });
+
+    withCloud(function () {
+      var chain = cloud.database.from('jp_questions')
+        .update({ status: 'settled', result: resultOid, final_odds: finalOdds, settled_at: new Date().toISOString() })
+        .eq('qid', q.qid).then(check);
+      payouts.forEach(function (p) {
+        chain = chain.then(function () {
+          return cloud.database.from('jp_bets').insert({
+            qid: q.qid, uid: p.uid, nickname: p.nickname, outcome_id: p.oid,
+            stake: 0, odds_at_bet: finalOdds, status: 'won', kind: 'settle',
+            shares: 0, payout: p.payout,
+            placed_at: new Date().toISOString(), settled_at: new Date().toISOString()
+          }).then(check);
+        });
+      });
+      /* 持仓行统一离场：不再计入在押，也不会被二次结算 */
+      chain = chain.then(function () {
+        return cloud.database.from('jp_bets')
+          .update({ status: 'settled', settled_at: new Date().toISOString() })
+          .eq('qid', q.qid).eq('status', 'open').then(check);
+      });
+      return chain;
+    });
+  }
+
   /* 结算核心：支持 resultOid='draw'（公投平局 → 投注全额退还） */
   function doSettle(q, resultOid) {
+    if (q.mode === 'lmsr') return doSettleLmsr(q, resultOid);
     var isDraw = resultOid === 'draw';
     var finalOdds = isDraw ? 1 : OnlineCore.settleOdds(q, state.bets, resultOid);
     var wonBets = state.bets.filter(function (b) {
@@ -964,7 +1173,8 @@ var OnlineApp = (function () {
       var chain = cloud.database.from('jp_questions').insert({
         qid: qid,
         title: title, descr: descr, mode: mode,
-        fee: mode === 'pool' ? state.settings.site.default_fee : 0,
+        fee: mode === 'fixed' ? 0 : state.settings.site.default_fee,
+        lmsr: mode === 'lmsr' ? { b: 500, q0: {} } : null,
         deadline: deadline, outcomes: outcomes, pool: pool,
         settle_mode: settleMode, vote_end: settleMode === 'vote' ? voteEnd : null,
         category: ($('q-cat') ? $('q-cat').value : '') || '未分类',
@@ -1427,7 +1637,7 @@ var OnlineApp = (function () {
         '<span class="q-cat">' + esc(catOf(q)) + '</span>' +
         '<span class="q-settle-mode">' + esc(OnlineCore.SETTLE_LABELS[OnlineCore.settleModeOf(q)]) + '</span>' +
         '<span class="q-deadline">截止 ' + esc(q.deadline) + '</span>' +
-        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
         (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
         '</div>' +
         '<div class="q-title">' + esc(q.title) + '</div>' +
@@ -1485,7 +1695,7 @@ var OnlineApp = (function () {
       '<span class="q-settle-mode" title="揭晓方式">' + esc(OnlineCore.SETTLE_LABELS[mode]) + '</span>' +
       (zone === 'voting' && OnlineCore.voteClosed(q) ? '<span class="q-status expired">公投已结束 · 待结算</span>' : '') +
       (q.deadline ? '<span class="q-deadline" data-countdown="' + q.qid + '">' + esc(OnlineCore.dayDiffLabel(q)) + '</span>' : '') +
-      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : '彩池 · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
       (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
       (q.pinned ? '<span class="q-status pinned">置顶</span>' : '') +
       (q.hidden && state.adminUnlocked ? '<span class="q-status hidden">已下架</span>' : '') +
@@ -1532,6 +1742,27 @@ var OnlineApp = (function () {
     } else if (expired) {
       betRow = '<div class="bet-row expired-note"><span>已过截止日期，等待按公开事实揭晓' +
         (state.adminUnlocked ? '（站长可在「站长台」用 AI 辅助判定）' : '') + '。</span></div>';
+    } else if (canBet && q.mode === 'lmsr') {
+      var pos = OnlineCore.lmsrPositionOf(q, state.bets, state.uid);
+      var held = q.outcomes.filter(function (o) { return pos[o.id] && pos[o.id].shares >= 1; });
+      var posLine = held.length
+        ? '<div class="bet-row"><span>我的持仓：</span>' + held.map(function (o) {
+            var p = pos[o.id];
+            var pnlCls = p.pnl >= 0 ? 'pot' : '';
+            return '<span style="margin-right:10px">' + esc(o.label) + ' <b>' + Math.floor(p.shares) + '</b> 份' +
+              ' · 成本 ' + p.cost.toFixed(1) + ' · 现值 ' + p.value.toFixed(1) +
+              ' <b class="' + pnlCls + '">' + (p.pnl >= 0 ? '+' : '') + p.pnl.toFixed(1) + '</b>' +
+              ' <button class="btn-link" data-lmsr-sell="' + esc(q.qid) + '" data-oid="' + esc(o.id) + '">全部卖出</button>' +
+              '</span>';
+          }).join('') + '</div>'
+        : '';
+      betRow = posLine +
+        '<div class="bet-row">' +
+        '<span>买入</span><input type="number" min="' + minBet + '" step="10" value="50" data-lmsr-budget="' + esc(q.qid) + '">' +
+        '<span>可得 <b data-lmsr-shares="' + esc(q.qid) + '">—</b> 份</span>' +
+        '<button class="btn btn-primary" data-lmsr-buy="' + esc(q.qid) + '" style="width:auto;padding:5px 14px">买入</button>' +
+        '<span class="hint">按当前价格成交，命中每份兑 1 分；随时可卖出</span>' +
+        '</div>';
     } else if (canBet) {
       betRow = '<div class="bet-row">' +
         '<span>投注</span><input type="number" min="' + minBet + '" step="10" value="50" data-stake="' + q.qid + '">' +
@@ -1640,6 +1871,41 @@ var OnlineApp = (function () {
   }
 
   function bindQuestionEvents() {
+    /* LMSR：买入金额 → 估算可得份额 */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lmsr-budget]'), function (input) {
+      function update() {
+        var q = findQuestion(input.getAttribute('data-lmsr-budget'));
+        var out = document.querySelector('[data-lmsr-shares="' + (q ? q.qid : '') + '"]');
+        if (!q || !out) return;
+        var sel = document.querySelector('input[name="q-' + q.qid + '"]:checked');
+        if (!sel) { out.textContent = '—（先选选项）'; return; }
+        var budget = Math.floor(Number(input.value) || 0);
+        var st = OnlineCore.lmsrStateOf(q, state.bets);
+        var idx = q.outcomes.map(function (o) { return o.id; }).indexOf(sel.value);
+        if (idx < 0 || typeof LmsrCore === 'undefined') { out.textContent = '—'; return; }
+        out.textContent = LmsrCore.maxShares(st.q, st.b, idx, budget * 0.97, { fee: q.fee });
+      }
+      input.addEventListener('input', update);
+      input.addEventListener('change', update);
+      document.addEventListener('change', function (ev) {
+        if (ev.target && ev.target.name === 'q-' + input.getAttribute('data-lmsr-budget')) update();
+      });
+      update();
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lmsr-buy]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var qid = btn.getAttribute('data-lmsr-buy');
+        var sel = document.querySelector('input[name="q-' + qid + '"]:checked');
+        if (!sel) { alert('先选择一个选项'); return; }
+        var input = document.querySelector('[data-lmsr-budget="' + qid + '"]');
+        buyLmsr(qid, sel.value, input ? input.value : 0);
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lmsr-sell]'), function (btn) {
+      btn.addEventListener('click', function () {
+        sellLmsr(btn.getAttribute('data-lmsr-sell'), btn.getAttribute('data-oid'), 0);
+      });
+    });
     Array.prototype.forEach.call(document.querySelectorAll('[data-stake]'), function (input) {
       function update() {
         var q = findQuestion(input.getAttribute('data-stake'));

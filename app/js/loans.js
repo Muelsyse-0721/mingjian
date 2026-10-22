@@ -167,10 +167,36 @@ var LoanCore = (function () {
     (payments || []).forEach(function (p) { if (p.uid === uid) v -= Number(p.amount); });
     return round2(v);
   }
+  /* 在押（成本口径）
+     彩池：open 投注的 stake 直接相加
+     LMSR：按「剩余份额的平均成本」计——卖出只减少持仓，不制造盈亏，
+           否则卖出所得会被算成凭空多出来的净资产 */
   function openStakeOf(uid, bets) {
-    return round2((bets || []).reduce(function (s, b) {
-      return (b.uid === uid && b.status === 'open') ? s + Number(b.stake) : s;
-    }, 0));
+    var plain = 0, groups = {};
+    (bets || []).forEach(function (b) {
+      if (b.uid !== uid) return;
+      if (b.kind === 'buy' || b.kind === 'sell') {
+        if (b.status !== 'open') return;      /* 已结算/已离场的不算 */
+        var k = b.qid + '|' + b.outcome_id;
+        var g = groups[k] || (groups[k] = { buyShares: 0, buyCost: 0, soldShares: 0 });
+        if (b.kind === 'buy') {
+          g.buyShares += Number(b.shares || 0);
+          g.buyCost += Number(b.stake || 0);
+        } else {
+          g.soldShares += Math.abs(Number(b.shares || 0));
+        }
+        return;
+      }
+      if (b.status === 'open') plain += Number(b.stake) || 0;
+    });
+    var lmsr = 0;
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k];
+      if (g.buyShares <= 0) return;
+      var remain = Math.max(0, g.buyShares - g.soldShares);
+      lmsr += g.buyCost * (remain / g.buyShares);
+    });
+    return round2(plain + lmsr);
   }
   function netWorthOf(uid, bets, loans, payments, settings, now) {
     return round2(cashOf(uid, bets, loans, payments, settings) +
