@@ -4718,6 +4718,16 @@ var OnlineApp = (function () {
   function wireCommonUI() {
     if (wiredCommon) return;
     wiredCommon = true;
+    /* 昵称由服务端异步补齐：到位后立刻刷新头像区，不用等下一次渲染 */
+    if (AuthModule && AuthModule.onChange) {
+      AuthModule.onChange(function () {
+        var nk = AuthModule.getNickname();
+        if (!nk || nk === state.nickname) return;
+        state.nickname = nk;
+        var nv = $('nick-view');
+        if (nv) nv.textContent = nk;
+      });
+    }
     on('btn-create-q', 'click', createQuestion);
     on('q-mode', 'change', function () {
       $('q-odds-field').style.display = $('q-mode').value === 'fixed' ? '' : 'none';
@@ -4753,6 +4763,8 @@ var OnlineApp = (function () {
   function enterAsAuthed() {
     state.uid = AuthModule.getUid();
     state.nickname = AuthModule.getNickname();
+    /* 本地缓存可能为空：主动向服务端补一次（回调里会刷新头像区） */
+    if (AuthModule.loadServerNickname) AuthModule.loadServerNickname();
     state.adminUnlocked = adminUnlockedFor(state.uid);
     wireCommonUI();
     syncAdminRole();

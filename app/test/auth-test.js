@@ -207,6 +207,20 @@ function makeCloud(auth, db) { return { auth: auth, database: db || makeDb() }; 
   })();
 
   }).then(function () {
+
+  /* T10：会话恢复时本地缓存为空 → 必须回读 jp_profiles（2026-10-22 线上「昵称未设置」回归） */
+  return (function () {
+    localStorage.clear();                     /* 模拟换浏览器 / 清缓存 */
+    var a = makeAuth({ hasSession: true, sessionId: 'auth-uid-9' });
+    return Promise.resolve(Auth.init(makeCloud(a, makeDb({ nickname: '管理员' }))))
+      .then(function () { return new Promise(function (r) { setTimeout(r, 30); }); })
+      .then(function () {
+        eq('T10 恢复会话后昵称从服务端补齐', Auth.getNickname(), '管理员');
+        ok('T10 已登录', Auth.isAuthed() === true);
+      });
+  })();
+
+  }).then(function () {
     console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
     process.exit(fail ? 1 : 0);
   }).catch(function (e) {

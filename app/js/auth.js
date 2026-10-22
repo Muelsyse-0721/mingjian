@@ -77,6 +77,11 @@ var Auth = (function () {
     if (session && session.user) {
       uid = session.user.id || '';
       nickname = localNick() || '';
+      emit();
+      /* 昵称以 jp_profiles 为准：本地缓存被清 / 换浏览器时，必须回读一次，
+         否则已登录但显示「未设置」（2026-10-22 线上问题） */
+      if (uid) loadServerNickname();
+      return session;
     } else {
       uid = '';
       nickname = '';
