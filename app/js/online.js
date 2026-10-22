@@ -548,6 +548,25 @@ var OnlineApp = (function () {
     return LoanCore.isBankrupt(state.uid, state.bets, state.loans, state.payments, state.settings);
   }
   function setBusy(v) { state.busy = v; renderAll(); }
+
+  /* 兜底：任何未捕获异常都让用户看得见（此前会表现为"点了没反应"） */
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('error', function (ev) {
+      try {
+        state.busy = false;
+        var msg = (ev && ev.message) || '未知错误';
+        if (typeof showError === 'function') showError('页面出错：' + msg);
+      } catch (e) {}
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      try {
+        state.busy = false;
+        var r = ev && ev.reason;
+        var msg = (r && (r.message || r)) || '未知错误';
+        if (typeof showError === 'function') showError('请求失败：' + msg);
+      } catch (e) {}
+    });
+  }
   function showError(msg) { state.lastError = msg; renderAll(); }
 
   /* ---------- 公共奖池 ---------- */
@@ -680,9 +699,21 @@ var OnlineApp = (function () {
   /* 统一写操作：busy → 执行 → 重载 → 破产检查 → 仲裁质押兜底结算 → 公投到期兜底结算 → 渲染；失败弹窗且恢复 */
   function withCloud(work) {
     if (AuthModule && !AuthModule.isAuthed()) { openLoginModal(); return; }
-    if (state.busy) return;
-    setBusy(true);
-    return work().then(function () {
+    /* 忙时给反馈而不是静默返回：否则用户看到的就是"点了没反应" */
+    if (state.busy) { alert('正在同步数据，请稍等一秒再试'); return; }
+    var p;
+    try {
+      setBusy(true);
+      p = work();
+    } catch (e) {
+      /* 同步异常会让 busy 永远停在 true —— 之后所有操作都会静默失效。
+         这里必须无条件复位，哪怕 renderAll 也不可用。 */
+      state.busy = false;
+      try { renderAll(); } catch (e2) {}
+      alert('操作未执行：' + (e && e.message ? e.message : e));
+      return;
+    }
+    return Promise.resolve(p).then(function () {
       return loadData();
     }).then(function () {
       return checkBankruptcy();
