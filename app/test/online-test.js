@@ -1234,6 +1234,15 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
     .filter(x => x.qid === 'q-lmsr-dom')[0], w.__fakeDB._tables.jp_bets).yes;
   check('买入后价格上行', priceAfterBuy > 0.5, String(priceAfterBuy));
 
+  /* 站长台监控：应显示试点题的敞口与成交 */
+  click(w, w.document.querySelector('[data-view="admin"]'));
+  await sleep(60);
+  const lmsrPanel = $(w, 'admin-lmsr');
+  const panelHTML = lmsrPanel ? lmsrPanel.innerHTML : '';
+  check('监控面板渲染', panelHTML.indexOf('LMSR 试点监控') !== -1);
+  check('监控面板显示敞口', panelHTML.indexOf('敞口') !== -1);
+  check('监控面板统计买卖笔数', panelHTML.indexOf('笔') !== -1 && panelHTML.indexOf('净收入') !== -1);
+
   console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
 })();

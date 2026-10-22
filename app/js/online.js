@@ -3578,6 +3578,7 @@ var OnlineApp = (function () {
     gate.style.display = 'none';
     body.style.display = '';
     renderAdminStats();
+    renderAdminLmsr();
     renderAdminReview();
     renderAdminPending();
     renderAdminLoans();
@@ -3739,6 +3740,49 @@ var OnlineApp = (function () {
       chain = chain.then(function () { loadPrizePool().then(function () { renderAll(); }); });
       return chain;
     });
+  }
+
+  /* LMSR 试点监控：价格、成交、平台敞口 vs 上限（b·ln n） */
+  function renderAdminLmsr() {
+    var box = $('admin-lmsr');
+    if (!box) return;
+    var list = state.questions.filter(function (q) { return q.mode === 'lmsr'; });
+    var title = '<div class="card-title">LMSR 试点监控（' + list.length + '）</div>';
+    if (!list.length) {
+      box.innerHTML = title + '<div class="q-empty">还没有份额市场题。建题时选择「份额市场」即可开设。</div>';
+      return;
+    }
+    if (typeof LmsrCore === 'undefined') { box.innerHTML = title + '<div class="q-empty">定价模块未加载。</div>'; return; }
+
+    var html = title + '<p class="hint">敞口 = 最大可能派彩 − 净收入，上限 b·ln(n)。' +
+      '超过 90% 应锁题（只许卖出）。价格偏离 2%~98% 时买入会被拦。</p>';
+    list.forEach(function (q) {
+      var st = OnlineCore.lmsrStateOf(q, state.bets);
+      var cfg = OnlineCore.lmsrConfig(q);
+      var rows = state.bets.filter(function (b) {
+        return b.qid === q.qid && (b.kind === 'buy' || b.kind === 'sell');
+      });
+      var buys = rows.filter(function (b) { return b.kind === 'buy'; });
+      var sells = rows.filter(function (b) { return b.kind === 'sell'; });
+      var net = rows.reduce(function (s, b) { return s + Number(b.stake || 0); }, 0);
+      var maxPayout = Math.max.apply(null, st.q.concat([0]));
+      var used = Math.max(0, maxPayout - net);
+      var cap = LmsrCore.exposure(st.b, q.outcomes.length);
+      var pct = cap > 0 ? used / cap : 0;
+      var hot = pct >= 0.9;
+      html += '<div class="pending-item">' +
+        '<div class="pending-title">' + esc(q.title) +
+        (q.status !== 'open' ? ' <span class="q-status expired">' + esc(q.status) + '</span>' : '') + '</div>' +
+        '<div class="pending-meta">' + q.outcomes.map(function (o, i) {
+          return esc(o.label) + ' ' + (st.prices[i] * 100).toFixed(1) + '%';
+        }).join(' · ') + ' · 截止 ' + esc(q.deadline || '无') + '</div>' +
+        '<div class="pending-meta">成交 ' + rows.length + ' 笔（买 ' + buys.length + ' / 卖 ' + sells.length + '）' +
+        ' · 净收入 ' + net.toFixed(1) + ' 分' +
+        ' · 敞口 ' + used.toFixed(1) + ' / ' + cap.toFixed(0) +
+        (hot ? ' <b style="color:var(--green)">（≥90%，建议锁题）</b>' : '') + '</div>' +
+        '</div>';
+    });
+    box.innerHTML = html;
   }
 
   /* 建题审核：普通用户的题先进 review，站长在此放行或驳回 */
