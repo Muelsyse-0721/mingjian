@@ -67,9 +67,17 @@ var ArbitCore = (function () {
     if (reason.length > REASON_MAX) return { ok: false, reason: '仲裁理由不超过 ' + REASON_MAX + ' 字' };
     /* 本人押过：对结果有切身关注，防止围观者滥诉 */
     var bet = (ctx.bets || []).some(function (b) {
-      return b.qid === q.qid && b.uid === ctx.uid && (!b.kind || b.kind === 'bet') && num(b.stake) > 0;
+      if (b.qid !== q.qid || b.uid !== ctx.uid) return false;
+      /* 彩池投注与 LMSR 买入都算「押过」 */
+      if (b.kind === 'buy') return num(b.shares) > 0 || num(b.stake) > 0;
+      if (b.kind && b.kind !== 'bet') return false;
+      return num(b.stake) > 0;
     });
     if (!bet) return { ok: false, reason: '只有押过这个问题的人可以发起仲裁' };
+    /* 挑战窗口：揭晓后限时质疑，过了窗口结果即为最终（ctx.challenge 未传则跳过，兼容旧调用） */
+    if (ctx.challenge && ctx.challenge.until && ctx.challenge.provisional === false) {
+      return { ok: false, reason: '挑战窗口已关闭（' + ctx.challenge.hours + ' 小时），结果已定' };
+    }
     /* 每问一次（已驳回的允许再次发起） */
     var mine = disputesOf(q.qid, ctx.disputes).filter(function (d) {
       return d.uid === ctx.uid && d.status !== 'dismissed';

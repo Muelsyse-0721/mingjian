@@ -167,6 +167,15 @@ var OnlineCore = (function () {
     return { pools: pools, total: total };
   }
 
+  /* 动态抽水：中间价多抽、极端价少抽（f × 4p(1−p)）。
+     仅对显式开启 dyn_fee 的题生效，避免悄悄改掉存量题的经济。 */
+  function effectiveFee(q, p) {
+    var f = Number(q.fee) || 0;
+    if (!q || !q.dyn_fee) return f;
+    var pp = Math.min(Math.max(Number(p) || 0, 0), 1);
+    return f * 4 * pp * (1 - pp);
+  }
+
   function currentOdds(q, bets) {
     var odds = {};
     if (q.mode === 'lmsr') {
@@ -183,7 +192,8 @@ var OnlineCore = (function () {
     }
     var r = poolOf(q, bets);
     q.outcomes.forEach(function (o) {
-      odds[o.id] = r.pools[o.id] > 0 ? r.total * (1 - Number(q.fee)) / r.pools[o.id] : 0;
+      var p = r.total > 0 ? r.pools[o.id] / r.total : 0;
+      odds[o.id] = r.pools[o.id] > 0 ? r.total * (1 - effectiveFee(q, p)) / r.pools[o.id] : 0;
     });
     return { odds: odds, pools: r.pools, total: r.total };
   }
@@ -241,7 +251,8 @@ var OnlineCore = (function () {
     var r = poolOf(q, bets);
     var winPool = r.pools[oid] + stake;
     var total = r.total + stake;
-    return stake * total * (1 - Number(q.fee)) / winPool;
+    var p = total > 0 ? winPool / total : 0;
+    return stake * total * (1 - effectiveFee(q, p)) / winPool;
   }
 
   /* 揭晓时的最终赔率：resultOid 优先（揭晓前 q.result 尚未写入） */
@@ -252,7 +263,8 @@ var OnlineCore = (function () {
       return o ? o.fixedOdds : 0;
     }
     var r = poolOf(q, bets);
-    return r.pools[result] > 0 ? r.total * (1 - Number(q.fee)) / r.pools[result] : 0;
+    var p = r.total > 0 ? r.pools[result] / r.total : 0;
+    return r.pools[result] > 0 ? r.total * (1 - effectiveFee(q, p)) / r.pools[result] : 0;
   }
 
   /* ---------- 生命周期 ---------- */
@@ -297,6 +309,51 @@ var OnlineCore = (function () {
   }
 
   /* 大厅分区：open 进行中 / search 待平台检索 / voting 公投中 / manual 待人工揭晓 / settled 已揭晓 */
+  /* Brier 准确率：对已揭晓的题，按「下注时的隐含概率」与实际结果算 (p−y)²。
+     0 = 完美，0.25 = 随机猜（二元题 p=0.5），1 = 全错。
+     比净资产更能反映判断力——净资产奖励梭哈和运气。 */
+  function brierOf(uid, questions, bets) {
+    var byQ = {};
+    (questions || []).forEach(function (q) { byQ[q.qid] = q; });
+    var sum = 0, n = 0, wins = 0;
+    (bets || []).forEach(function (b) {
+      if (b.uid !== uid) return;
+      if (b.kind && b.kind !== 'bet' && b.kind !== 'buy') return;
+      var q = byQ[b.qid];
+      if (!q || q.status !== 'settled' || !q.result) return;
+      var p = null;
+      if (b.kind === 'buy') p = Number(b.price);
+      else if (Number(b.odds_at_bet) > 0) p = 1 / Number(b.odds_at_bet);
+      if (p === null || !isFinite(p)) return;
+      p = Math.min(Math.max(p, 0), 1);
+      var y = (b.outcome_id === q.result) ? 1 : 0;
+      sum += (p - y) * (p - y);
+      n++; wins += y;
+    });
+    return { n: n, brier: n ? sum / n : null, wins: wins, winRate: n ? Math.round(wins / n * 100) : null };
+  }
+
+  /* 挑战窗口：揭晓后先「暂定」，窗口结束自动「已定」。
+     实现要点：不写库，纯按 settled_at + challenge_hours 推导——
+     否则普通用户没有题目表写权限，无法把题目标成已定。 */
+  function challengeOf(q, settings, now) {
+    var hours = Number((settings && settings.site && settings.site.challenge_hours));
+    if (!isFinite(hours) || hours <= 0) hours = 24;
+    if (q.status !== 'settled' || !q.settled_at) return { provisional: false, until: null, msLeft: 0, hours: hours };
+    var settledMs = Date.parse(q.settled_at);
+    if (!isFinite(settledMs)) return { provisional: false, until: null, msLeft: 0, hours: hours };
+    var until = settledMs + hours * 3600 * 1000;
+    var t = now === undefined ? Date.now() : now;
+    return { provisional: t < until, until: until, msLeft: Math.max(0, until - t), hours: hours };
+  }
+
+  function challengeLabel(ch) {
+    if (!ch.provisional) return '';
+    var h = Math.floor(ch.msLeft / 3600000);
+    var m = Math.floor((ch.msLeft % 3600000) / 60000);
+    return h > 0 ? ('暂定 · 剩 ' + h + ' 小时') : ('暂定 · 剩 ' + m + ' 分');
+  }
+
   function zoneOf(q, now) {
     if (q.status === 'review') return 'review';
     if (q.status === 'rejected') return 'rejected';
@@ -383,6 +440,8 @@ var OnlineCore = (function () {
     poolOf: poolOf, currentOdds: currentOdds, probabilities: probabilities,
     probText: probText, potentialPayout: potentialPayout,
     lmsrConfig: lmsrConfig, lmsrStateOf: lmsrStateOf, lmsrPositionOf: lmsrPositionOf,
+    challengeOf: challengeOf, challengeLabel: challengeLabel, effectiveFee: effectiveFee,
+    brierOf: brierOf,
     settleOdds: settleOdds, isExpired: isExpired, phaseOf: phaseOf, dayDiffLabel: dayDiffLabel,
     settleModeOf: settleModeOf, isVotingOpen: isVotingOpen, voteClosed: voteClosed,
     zoneOf: zoneOf, ZONE_LABELS: ZONE_LABELS, SETTLE_LABELS: SETTLE_LABELS,
@@ -433,6 +492,7 @@ var OnlineApp = (function () {
     evidenceDigest: {},
     busy: false, lastError: '',
     adminUnlocked: false,
+    boardMetric: 'net',
     isAdmin: false,
     llmBusy: '', llmSuggestion: null
   };
@@ -1165,6 +1225,10 @@ var OnlineApp = (function () {
       outcomes.forEach(function (o, i) { o.fixedOdds = oddsList[i]; });
     }
 
+    /* 多结果互斥：3 个以上选项时补「其他」兜底，避免出现"全都不中"的死局 */
+    if (outcomes.length >= 3 && !outcomes.some(function (o) { return /其他|其它/.test(o.label); })) {
+      outcomes.push({ id: 'other-' + Date.now().toString(36), label: '其他' });
+    }
     var pool = {};
     if (mode === 'pool' && simpool) outcomes.forEach(function (o) { pool[o.id] = 1000; });
     var qid = 'q-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36);
@@ -1175,6 +1239,7 @@ var OnlineApp = (function () {
         title: title, descr: descr, mode: mode,
         fee: mode === 'fixed' ? 0 : state.settings.site.default_fee,
         lmsr: mode === 'lmsr' ? { b: 500, q0: {} } : null,
+        dyn_fee: mode === 'pool',
         deadline: deadline, outcomes: outcomes, pool: pool,
         settle_mode: settleMode, vote_end: settleMode === 'vote' ? voteEnd : null,
         category: ($('q-cat') ? $('q-cat').value : '') || '未分类',
@@ -1428,6 +1493,19 @@ var OnlineApp = (function () {
     }));
   }
 
+  var deepLinked = false;
+  function applyDeepLink() {
+    if (deepLinked) return;
+    var qid = '';
+    try { qid = new URLSearchParams(location.search).get('q') || ''; } catch (e) {}
+    if (!qid) { deepLinked = true; return; }
+    var el = document.querySelector('[data-qid="' + qid + '"]');
+    if (!el) return;                     /* 还没渲染到，等下次渲染再试 */
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+    el.style.outline = '2px solid var(--accent, #2E6BB0)';
+    deepLinked = true;
+  }
+
   function renderHall() {
     renderHallTabs();
     renderMyDrafts();
@@ -1633,11 +1711,11 @@ var OnlineApp = (function () {
       var winLabel = isDraw ? '公投平局 · 投注全额退还' : OnlineCore.outcomeLabelOf(q, q.result);
         return '<div class="q-card q-settled" data-qid="' + esc(q.qid) + '">' +
         '<div class="q-head">' +
-        '<span class="q-status settled">已揭晓</span>' +
+        '<span class="q-status settled">' + (OnlineCore.challengeOf(q, state.settings).provisional ? '暂定' : '已定') + '</span>' +
         '<span class="q-cat">' + esc(catOf(q)) + '</span>' +
         '<span class="q-settle-mode">' + esc(OnlineCore.SETTLE_LABELS[OnlineCore.settleModeOf(q)]) + '</span>' +
         '<span class="q-deadline">截止 ' + esc(q.deadline) + '</span>' +
-        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+        '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%' + (q.dyn_fee ? '（动态）' : '')) + '</span>' +
         (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
         '</div>' +
         '<div class="q-title">' + esc(q.title) + '</div>' +
@@ -1687,7 +1765,9 @@ var OnlineApp = (function () {
     var canBet = !settled && !expired && avail >= minBet &&
       state.settings.site.accept_new_bets && !state.settings.site.maintenance;
 
+    var ch = OnlineCore.challengeOf(q, state.settings);
     var statusTxt = { open: '进行中', search: '待平台检索', voting: '公投中', manual: '待人工揭晓', settled: '已揭晓' }[zone];
+    if (settled) statusTxt = ch.provisional ? OnlineCore.challengeLabel(ch) : '已定';
     var statusCls = { open: 'open', search: 'expired', voting: 'open', manual: 'expired', settled: 'settled' }[zone];
     var head = '<div class="q-head">' +
       '<span class="q-status ' + statusCls + '">' + statusTxt + '</span>' +
@@ -1695,9 +1775,10 @@ var OnlineApp = (function () {
       '<span class="q-settle-mode" title="揭晓方式">' + esc(OnlineCore.SETTLE_LABELS[mode]) + '</span>' +
       (zone === 'voting' && OnlineCore.voteClosed(q) ? '<span class="q-status expired">公投已结束 · 待结算</span>' : '') +
       (q.deadline ? '<span class="q-deadline" data-countdown="' + q.qid + '">' + esc(OnlineCore.dayDiffLabel(q)) + '</span>' : '') +
-      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%') + '</span>' +
+      '<span class="q-mode">' + (q.mode === 'fixed' ? '固定赔率' : (q.mode === 'lmsr' ? '份额市场' : '彩池') + ' · 抽水 ' + Math.round(Number(q.fee) * 100) + '%' + (q.dyn_fee ? '（动态）' : '')) + '</span>' +
       (q.creator_name ? '<span class="q-deadline">出题：' + esc(q.creator_name) + '</span>' : '') +
       (q.pinned ? '<span class="q-status pinned">置顶</span>' : '') +
+      '<button class="btn-link" data-share="' + esc(q.qid) + '">分享</button>' +
       (q.hidden && state.adminUnlocked ? '<span class="q-status hidden">已下架</span>' : '') +
       (openStake ? '<span class="q-status open">我已投 ' + openStake + ' 分</span>' : '') +
       (function () {
@@ -1901,6 +1982,24 @@ var OnlineApp = (function () {
         buyLmsr(qid, sel.value, input ? input.value : 0);
       });
     });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-share]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var q = findQuestion(btn.getAttribute('data-share'));
+        if (!q) return;
+        var ps = OnlineCore.probabilities(q, state.bets);
+        var top = q.outcomes.map(function (o) {
+          return o.label + ' ' + OnlineCore.probText(ps[o.id]);
+        }).join(' · ');
+        var url = location.origin + location.pathname + '?q=' + encodeURIComponent(q.qid);
+        var text = '【' + q.title + '】' + top + ' — ' + url;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { alert('已复制分享文案'); },
+            function () { prompt('复制这段分享文案：', text); });
+        } else {
+          prompt('复制这段分享文案：', text);
+        }
+      });
+    });
     Array.prototype.forEach.call(document.querySelectorAll('[data-lmsr-sell]'), function (btn) {
       btn.addEventListener('click', function () {
         sellLmsr(btn.getAttribute('data-lmsr-sell'), btn.getAttribute('data-oid'), 0);
@@ -1953,13 +2052,20 @@ var OnlineApp = (function () {
     var ais = rows.filter(function (p) { return isAiUid(p.uid); });
     var tab = state.boardTab === 'ai' ? 'ai' : 'human';
 
-    var html = '<div class="card"><div class="card-title">天梯榜 · 按净资产排名（现金 + 在押 − 负债）</div>' +
+    var metric = state.boardMetric === 'brier' ? 'brier' : 'net';
+    var html = '<div class="card"><div class="card-title">天梯榜 · ' +
+      (metric === 'brier' ? '按预测准确率排名（Brier 分数，越低越准）' : '按净资产排名（现金 + 在押 − 负债）') + '</div>' +
       '<div class="ai-note">天梯<b>真人榜与 AI 榜分开</b>。AI 参与者一律标注人格代号与编号' +
       '（如 <b>数据党 #01</b> 带 <span class="ai-badge">AI</span>），绝不伪装真人；' +
       'AI 不参与公投与仲裁投票。</div>' +
       '<div class="board-tabs" style="margin-top:10px">' +
       '<button class="btn' + (tab === 'human' ? ' active' : '') + '" data-board-tab="human">真人榜（' + humans.length + '）</button>' +
       '<button class="btn' + (tab === 'ai' ? ' active' : '') + '" data-board-tab="ai">AI 榜（' + ais.length + '）</button>' +
+      '</div>' +
+      '<div class="board-tabs" style="margin-top:6px">' +
+      '<button class="btn' + (metric === 'net' ? ' active' : '') + '" data-board-metric="net">净资产</button>' +
+      '<button class="btn' + (metric === 'brier' ? ' active' : '') + '" data-board-metric="brier">准确率</button>' +
+      '<span class="hint" style="margin-left:8px">准确率按时下注概率与实际结果算分，至少 5 题才上榜</span>' +
       '</div>';
 
     var list = tab === 'ai' ? ais : humans;
@@ -1967,6 +2073,15 @@ var OnlineApp = (function () {
       html += '<div class="q-empty">' + (tab === 'ai'
         ? '还没有 AI 参与记录。站长可在「站长台 → AI 活动」初始化并让 AI 下注。'
         : '还没有真人下注。天梯榜将在第一笔投注后出现。') + '</div>';
+    } else if (metric === 'brier') {
+      var withB = list.map(function (p) {
+        var b = OnlineCore.brierOf(p.uid, state.questions, state.bets);
+        return Object.assign({}, p, b);
+      }).filter(function (p) { return p.n >= 5; });
+      withB.sort(function (a, b) { return a.brier - b.brier; });
+      html += withB.length
+        ? boardBrierTable(withB)
+        : '<div class="q-empty">还没有人完成 5 道已揭晓的问题。攒够 5 题后按预测准确率排名。</div>';
     } else {
       html += boardTable(list);
     }
@@ -1990,6 +2105,25 @@ var OnlineApp = (function () {
     }
     box.innerHTML = html;
     bindBoardTabs();
+  }
+
+  function boardBrierTable(rows) {
+    var html = '<table class="ledger-table"><thead><tr>' +
+      '<th>#</th><th>玩家</th><th style="text-align:right">Brier</th>' +
+      '<th style="text-align:right">参与题数</th><th>命中率</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function (p, i) {
+      var me = p.uid === state.uid ? '（我）' : '';
+      var cls = p.brier <= 0.15 ? 'var(--pot, #B8860B)' : (p.brier >= 0.25 ? 'var(--green)' : '');
+      html += '<tr' + (p.uid === state.uid ? ' style="background:#F5F8FC"' : '') + '>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + aiNameHTML(p.uid, p.nickname) + me + '</td>' +
+        '<td class="amt"' + (cls ? ' style="color:' + cls + '"' : '') + '>' + p.brier.toFixed(3) + '</td>' +
+        '<td class="amt">' + p.n + '</td>' +
+        '<td>' + p.wins + ' / ' + p.n + '（' + p.winRate + '%）</td>' +
+        '</tr>';
+    });
+    return html + '</tbody></table>';
   }
 
   function boardTable(rows) {
@@ -2043,6 +2177,7 @@ var OnlineApp = (function () {
       btns[i].addEventListener('click', function () {
         state.boardTab = this.getAttribute('data-board-tab');
         renderBoard();
+    applyDeepLink();
       });
     }
   }
@@ -3170,7 +3305,8 @@ var OnlineApp = (function () {
     var v = ArbitCore.validateDispute({
       newResult: sel ? sel.value : '',
       reason: reasonEl ? reasonEl.value : ''
-    }, { q: q, bets: state.bets, disputes: state.disputes, uid: state.uid });
+    }, { q: q, bets: state.bets, disputes: state.disputes, uid: state.uid,
+         challenge: OnlineCore.challengeOf(q, state.settings) });
     if (!v.ok) { alert(v.reason); return; }
     withCloud(function () {
       return cloud.database.from('jp_disputes').insert({
@@ -3742,6 +3878,49 @@ var OnlineApp = (function () {
     });
   }
 
+  /* 只读快照导出：静态站没有服务端，无法提供真 API。
+     这里生成与 API 同结构的 JSON，供外部抓取/集成时手工更新。 */
+  function marketSnapshot() {
+    var out = { version: 1, generated_at: new Date().toISOString(), markets: [] };
+    state.questions.forEach(function (q) {
+      if (q.status === 'review' || q.status === 'rejected' || q.hidden) return;
+      var ps = OnlineCore.probabilities(q, state.bets);
+      out.markets.push({
+        qid: q.qid,
+        title: q.title,
+        category: catOf(q),
+        mode: q.mode,
+        settle_mode: OnlineCore.settleModeOf(q),
+        deadline: q.deadline || null,
+        status: q.status,
+        result: q.result || null,
+        challenge: OnlineCore.challengeOf(q, state.settings).provisional ? 'provisional' : 'final',
+        outcomes: q.outcomes.map(function (o) {
+          return { id: o.id, label: o.label, probability: ps[o.id] === null ? null : Math.round(ps[o.id] * 10000) / 10000 };
+        }),
+        volume: state.bets.filter(function (b) {
+          return b.qid === q.qid && (!b.kind || b.kind === 'bet' || b.kind === 'buy' || b.kind === 'sell');
+        }).reduce(function (s, b) { return s + Math.abs(Number(b.stake) || 0); }, 0)
+      });
+    });
+    return out;
+  }
+
+  function exportMarkets() {
+    var data = marketSnapshot();
+    var text = JSON.stringify(data, null, 2);
+    try {
+      var blob = new Blob([text], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'markets-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    } catch (e) {
+      prompt('复制下面这段 JSON：', text);
+    }
+  }
+
   /* LMSR 试点监控：价格、成交、平台敞口 vs 上限（b·ln n） */
   function renderAdminLmsr() {
     var box = $('admin-lmsr');
@@ -3754,7 +3933,8 @@ var OnlineApp = (function () {
     }
     if (typeof LmsrCore === 'undefined') { box.innerHTML = title + '<div class="q-empty">定价模块未加载。</div>'; return; }
 
-    var html = title + '<p class="hint">敞口 = 最大可能派彩 − 净收入，上限 b·ln(n)。' +
+    var html = title + '<p class="hint"><button class="btn-link" data-export-markets="1">导出市场 JSON（只读快照）</button></p>' +
+      '<p class="hint">敞口 = 最大可能派彩 − 净收入，上限 b·ln(n)。' +
       '超过 90% 应锁题（只许卖出）。价格偏离 2%~98% 时买入会被拦。</p>';
     list.forEach(function (q) {
       var st = OnlineCore.lmsrStateOf(q, state.bets);
@@ -3783,6 +3963,9 @@ var OnlineApp = (function () {
         '</div>';
     });
     box.innerHTML = html;
+    Array.prototype.forEach.call(box.querySelectorAll('[data-export-markets]'), function (b) {
+      b.addEventListener('click', exportMarkets);
+    });
   }
 
   /* 建题审核：普通用户的题先进 review，站长在此放行或驳回 */

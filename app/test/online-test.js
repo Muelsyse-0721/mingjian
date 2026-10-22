@@ -1242,6 +1242,57 @@ const myPayments = w => w.__fakeDB._tables.jp_loan_payments.filter(p => p.uid !=
   check('监控面板渲染', panelHTML.indexOf('LMSR 试点监控') !== -1);
   check('监控面板显示敞口', panelHTML.indexOf('敞口') !== -1);
   check('监控面板统计买卖笔数', panelHTML.indexOf('笔') !== -1 && panelHTML.indexOf('净收入') !== -1);
+  check('监控面板有导出按钮', panelHTML.indexOf('导出市场 JSON') !== -1);
+
+  /* ---------- [22] 挑战窗口 / 动态抽水 / Brier / 分享 ---------- */
+  console.log('[22] 挑战窗口·动态抽水·准确率榜');
+  const C22 = w.OnlineCore;
+  const NOW22 = Date.now();
+
+  /* 挑战窗口：按 settled_at 推导，不写库 */
+  const chOpen = C22.challengeOf({ status: 'settled', settled_at: new Date(NOW22 - 3600e3).toISOString() }, SETTINGS, NOW22);
+  check('揭晓 1 小时后仍在挑战窗口', chOpen.provisional === true && chOpen.msLeft > 0);
+  const chClosed = C22.challengeOf({ status: 'settled', settled_at: new Date(NOW22 - 30 * 3600e3).toISOString() }, SETTINGS, NOW22);
+  check('揭晓 30 小时后窗口关闭', chClosed.provisional === false);
+  const chOpenQ = C22.challengeOf({ status: 'open', deadline: '2099-01-01' }, SETTINGS, NOW22);
+  check('未揭晓没有挑战窗口', chOpenQ.provisional === false);
+  check('窗口文案带剩余小时', C22.challengeLabel(chOpen).indexOf('暂定') === 0);
+
+  /* 动态抽水：中间价满额、极端价接近零 */
+  const qPool = { qid: 'q-fee', mode: 'pool', fee: 0.05, dyn_fee: true, status: 'open',
+    outcomes: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], pool: { a: 500, b: 500 } };
+  check('p=50% 抽水 = 名义 5%', Math.abs(C22.effectiveFee(qPool, 0.5) - 0.05) < 1e-9);
+  check('p=5% 抽水 ≈ 0.95%', Math.abs(C22.effectiveFee(qPool, 0.05) - 0.0095) < 1e-6,
+    String(C22.effectiveFee(qPool, 0.05)));
+  const qNoDyn = Object.assign({}, qPool, { dyn_fee: false });
+  check('未开启动态的题费率不变', C22.effectiveFee(qNoDyn, 0.05) === 0.05);
+  const oddsDyn = C22.currentOdds(qPool, []);
+  check('p=50% 时动态赔率 = 1000×(1−5%)÷500 = 1.9', Math.abs(oddsDyn.odds.a - 1.9) < 0.01,
+    String(oddsDyn.odds.a));
+  const qSkew = Object.assign({}, qPool, { pool: { a: 50, b: 950 } });
+  const oddsSkew = C22.currentOdds(qSkew, []);
+  const fixedSkew = 1000 * 0.95 / 50;
+  check('极端价少抽水 → 赔率高于固定抽水', oddsSkew.odds.a > fixedSkew + 0.3,
+    oddsSkew.odds.a.toFixed(2) + ' vs ' + fixedSkew.toFixed(2));
+
+  /* Brier 准确率 */
+  const bq1 = { qid: 'b1', status: 'settled', result: 'yes', outcomes: [{ id: 'yes' }, { id: 'no' }] };
+  const bq2 = { qid: 'b2', status: 'settled', result: 'no', outcomes: [{ id: 'yes' }, { id: 'no' }] };
+  const bbets = [
+    { qid: 'b1', uid: 'u-b', outcome_id: 'yes', odds_at_bet: 2, stake: 10, kind: 'bet', status: 'won' },
+    { qid: 'b2', uid: 'u-b', outcome_id: 'yes', odds_at_bet: 4, stake: 10, kind: 'bet', status: 'lost' }
+  ];
+  const brier = C22.brierOf('u-b', [bq1, bq2], bbets);
+  check('Brier 参与题数', brier.n === 2, String(brier.n));
+  check('Brier = (0.5²+0.25²)/2 = 0.156', Math.abs(brier.brier - 0.15625) < 1e-6, String(brier.brier));
+  check('Brier 命中率按题算', brier.wins === 1 && brier.winRate === 50);
+  check('未揭晓的题不计分',
+    C22.brierOf('u-b', [{ qid: 'b1', status: 'open' }], bbets).n === 0);
+
+  /* 分享入口 */
+  click(w, w.document.querySelector('[data-view="hall"]'));
+  await sleep(30);
+  check('卡片有分享按钮', !!w.document.querySelector('[data-share]'));
 
   console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
