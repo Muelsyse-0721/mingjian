@@ -1207,6 +1207,12 @@ var OnlineApp = (function () {
   }
 
   /* ---------- 动作：建题 ---------- */
+  /* 份额市场默认费率：可被站点设置 lmsr_fee 覆盖，缺省 2%（往返约 4%） */
+  function feeForLmsr() {
+    var f = Number(state.settings && state.settings.site && state.settings.site.lmsr_fee);
+    return isFinite(f) && f > 0 ? f : 0.02;
+  }
+
   function createQuestion() {
     /* 防刷：出题同样要求登录身份；未加载 AntiFraud 则跳过 */
     if (typeof AntiFraud !== 'undefined') {
@@ -1268,7 +1274,9 @@ var OnlineApp = (function () {
       var chain = cloud.database.from('jp_questions').insert({
         qid: qid,
         title: title, descr: descr, mode: mode,
-        fee: mode === 'fixed' ? 0 : state.settings.site.default_fee,
+        /* 彩池在结算时一次性抽水（单边），份额市场每笔成交都抽（双边），
+           所以份额市场用更低的费率，否则一次往返会被抽走约两倍费率 */
+        fee: mode === 'fixed' ? 0 : (mode === 'lmsr' ? feeForLmsr() : state.settings.site.default_fee),
         lmsr: mode === 'lmsr' ? { b: 500, q0: {} } : null,
         dyn_fee: mode === 'pool',
         deadline: deadline, outcomes: outcomes, pool: pool,
